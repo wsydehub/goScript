@@ -6,7 +6,7 @@ compilationUnit
 
 //Function
 functionDeclaration
-    :   'func' Identifier formalParameters type_ block
+    :   'func' Identifier formalParameters (type_)* block
     ;
 
 formalParameters
@@ -49,12 +49,7 @@ variableInitializer
     ;
 
 arrayInitializer
-    :   '{' ( arrayInitializerElement (',' arrayInitializerElement)* )? '}'
-    ;
-
-arrayInitializerElement
-    :   mapInitializer
-    |   expression
+    :   '{' ( variableInitializer (',' variableInitializer)* )? '}'
     ;
 
 mapInitializer
@@ -62,14 +57,14 @@ mapInitializer
     ;
 
 type_
-    :   primitiveType Brackets?
-    |   mapType Brackets?
-    |   connectorType Brackets?
-    |   dynamicType Brackets?
+    :   primitiveType Brackets*
+    |   mapType Brackets*
+    |   connectorType Brackets*
+    |   dynamicType Brackets*
     ;
 
 mapType
-    :   'map' '<' (primitiveType | connectorType) ',' type_ '>'
+    :   'map' '<' primitiveType ',' type_ '>'
     ;
 
 connectorType
@@ -78,10 +73,12 @@ connectorType
 
 dynamicType
     :   'dynamic'
+    |   'error'
     ;
 
 primitiveType
     :   'int'
+    |   'uint'
     |   'float'
     |   'bool'
     |   'char'
@@ -90,13 +87,21 @@ primitiveType
 
 // Statement
 statement
-    : block #   CommonBlockStatement
-    |   'if' expression statement ('else' statement)?   #   IfStatement
-    |   'for' '(' forControl ')' statement  #   ForStatement
-    |   'return' expression? ';'    #   ReturnStatement
-    |   'break' ';' #   BreakStatement
-    |   'continue' ';'  #   ContinueStatement
-    |   expression ';'  #   ExprStatement
+    :   block
+    |   ifStatement
+    |   forStatement
+    |   returnStatement
+    |   breakStatement
+    |   continueStatement
+    |   expressionStatement
+    ;
+
+ifStatement
+    :   'if' expression statement ('else' statement)?
+    ;
+
+forStatement
+    :   'for' '(' forControl ')' statement
     ;
 
 forControl
@@ -112,25 +117,40 @@ forUpdate
     :   expressionList
     ;
 
+returnStatement
+    :   'return' expression? ';'
+    ;
+
+breakStatement
+    :   'break' ';'
+    ;
+
+continueStatement
+    :   'continue' ';'
+    ;
+
+expressionStatement
+    :   expression ';'
+    ;
+
 //Expression
 
 expression
-    :   primary # PrimaryExpr
-    |   expression '.' expression   #FetchExpr
-    |   expression '[' expression ']'   # IndexExpr
-    |   expression '(' expressionList? ')'  # CallExpr
-    |   ('+'|'-') expression    # NegativeExpr
-    |   '!' expression  # NotExpr
-    |   'new' creator   # CreatorExpr
-    |   expression ('*'|'/'|'%') expression #   MulDivExpr
-    |   expression ('+'|'-') expression #   AddSubExpr
-    |   expression ('<' '=' | '>' '=' | '>' | '<') expression   #   CompareExpr
-    |   expression ('==' | '!=') expression #   EqNEqExpr
+    :   primary #PrimaryExpr
+    |   expression '.' expression   #SelectorExpr
+    |   expression '[' expression ']'   #IndexExpr
+    |   expression '(' expressionList ')'  #CallExpr
+    |   expression ('++' | '--')    #SelfAddExpr
+    |   ('+'|'-'|'!') expression    #UnaryExpr
+    |   'new' creator   #CreateExpr
+    |   expression ('*'|'/'|'%') expression #MulExpr
+    |   expression ('+'|'-') expression #AddExpr
+    |   expression ('<=' | '>=' | '>' | '<' | '==' | '!=') expression   #ConditionalExpr
     |   expression '&&' expression  #   AndExpr
     |   expression '||' expression  #   OrExpr
     |   expression '?' expression ':' expression    #   TernaryExpr
-    |<assoc=right>  expression '=' expression   # AssignExpr
-    |<assoc=right>  Identifier ':=' expression  #   CreatorAndAssignExpr
+    |<assoc=right>  expression (',' expression)* '=' expression (',' expression)*   # AssignExpr
+    |<assoc=right>  expression (',' expression)* ':=' expression (',' expression)*  #   CreateAndAssignExpr
     ;
 
 primary
@@ -164,11 +184,19 @@ expressionList
     ;
 
 creator
-    :   mapType mapInitializer # MapCreator
-    |   creatorName '[' ']' arrayInitializer # ArrayCreator
-    |   connectorType '(' ')' # MeegoCreator
-    |   primitiveType '(' expression? ')' # PrimitiveCreator
-    |   dynamicType '(' expression? ')' #DynamicCreator
+    :   mapCreator
+    |   arrayCreator
+    |   connectorCreator
+    |   primitiveCreator
+    |   dynamicCreator
+    ;
+
+mapCreator
+    :   mapType mapInitializer
+    ;
+
+arrayCreator
+    :   creatorName Brackets+ arrayInitializer
     ;
 
 creatorName
@@ -176,6 +204,18 @@ creatorName
     |   mapType
     |   connectorType
     |   dynamicType
+    ;
+
+connectorCreator
+    :   connectorType '(' ')'
+    ;
+
+primitiveCreator
+    :   primitiveType '(' expression? ')'
+    ;
+
+dynamicCreator
+    :   dynamicType '(' expression? ')'
     ;
 
 //Lexer
@@ -209,7 +249,11 @@ Percent :   '%';
 
 Gt  : '>';
 
+Get :   '>=';
+
 Lt  : '<';
+
+Let : '<=';
 
 Assign  : '=';
 

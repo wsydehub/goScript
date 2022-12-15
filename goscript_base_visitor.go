@@ -1,6 +1,6 @@
 // Code generated from GoScript.g4 by ANTLR 4.9.2. DO NOT EDIT.
 
-package parser // GoScript
+package goScript // GoScript
 
 import "github.com/antlr/antlr4/runtime/Go/antlr"
 
@@ -52,10 +52,6 @@ func (v *BaseGoScriptVisitor) VisitArrayInitializer(ctx *ArrayInitializerContext
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseGoScriptVisitor) VisitArrayInitializerElement(ctx *ArrayInitializerElementContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseGoScriptVisitor) VisitMapInitializer(ctx *MapInitializerContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -80,7 +76,7 @@ func (v *BaseGoScriptVisitor) VisitPrimitiveType(ctx *PrimitiveTypeContext) inte
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseGoScriptVisitor) VisitCommonBlockStatement(ctx *CommonBlockStatementContext) interface{} {
+func (v *BaseGoScriptVisitor) VisitStatement(ctx *StatementContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -89,22 +85,6 @@ func (v *BaseGoScriptVisitor) VisitIfStatement(ctx *IfStatementContext) interfac
 }
 
 func (v *BaseGoScriptVisitor) VisitForStatement(ctx *ForStatementContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseGoScriptVisitor) VisitReturnStatement(ctx *ReturnStatementContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseGoScriptVisitor) VisitBreakStatement(ctx *BreakStatementContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseGoScriptVisitor) VisitContinueStatement(ctx *ContinueStatementContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseGoScriptVisitor) VisitExprStatement(ctx *ExprStatementContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -120,15 +100,43 @@ func (v *BaseGoScriptVisitor) VisitForUpdate(ctx *ForUpdateContext) interface{} 
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseGoScriptVisitor) VisitReturnStatement(ctx *ReturnStatementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseGoScriptVisitor) VisitBreakStatement(ctx *BreakStatementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseGoScriptVisitor) VisitContinueStatement(ctx *ContinueStatementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseGoScriptVisitor) VisitExpressionStatement(ctx *ExpressionStatementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseGoScriptVisitor) VisitMulExpr(ctx *MulExprContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseGoScriptVisitor) VisitAndExpr(ctx *AndExprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseGoScriptVisitor) VisitCreatorExpr(ctx *CreatorExprContext) interface{} {
+func (v *BaseGoScriptVisitor) VisitCreateAndAssignExpr(ctx *CreateAndAssignExprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseGoScriptVisitor) VisitFetchExpr(ctx *FetchExprContext) interface{} {
+func (v *BaseGoScriptVisitor) VisitAddExpr(ctx *AddExprContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseGoScriptVisitor) VisitConditionalExpr(ctx *ConditionalExprContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseGoScriptVisitor) VisitUnaryExpr(ctx *UnaryExprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -140,27 +148,19 @@ func (v *BaseGoScriptVisitor) VisitIndexExpr(ctx *IndexExprContext) interface{} 
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseGoScriptVisitor) VisitCreatorAndAssignExpr(ctx *CreatorAndAssignExprContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseGoScriptVisitor) VisitAssignExpr(ctx *AssignExprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseGoScriptVisitor) VisitNegativeExpr(ctx *NegativeExprContext) interface{} {
+func (v *BaseGoScriptVisitor) VisitSelectorExpr(ctx *SelectorExprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseGoScriptVisitor) VisitMulDivExpr(ctx *MulDivExprContext) interface{} {
+func (v *BaseGoScriptVisitor) VisitCreateExpr(ctx *CreateExprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseGoScriptVisitor) VisitCompareExpr(ctx *CompareExprContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseGoScriptVisitor) VisitEqNEqExpr(ctx *EqNEqExprContext) interface{} {
+func (v *BaseGoScriptVisitor) VisitSelfAddExpr(ctx *SelfAddExprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -169,14 +169,6 @@ func (v *BaseGoScriptVisitor) VisitPrimaryExpr(ctx *PrimaryExprContext) interfac
 }
 
 func (v *BaseGoScriptVisitor) VisitCallExpr(ctx *CallExprContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseGoScriptVisitor) VisitNotExpr(ctx *NotExprContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseGoScriptVisitor) VisitAddSubExpr(ctx *AddSubExprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -200,6 +192,10 @@ func (v *BaseGoScriptVisitor) VisitExpressionList(ctx *ExpressionListContext) in
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseGoScriptVisitor) VisitCreator(ctx *CreatorContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseGoScriptVisitor) VisitMapCreator(ctx *MapCreatorContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -208,7 +204,11 @@ func (v *BaseGoScriptVisitor) VisitArrayCreator(ctx *ArrayCreatorContext) interf
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseGoScriptVisitor) VisitMeegoCreator(ctx *MeegoCreatorContext) interface{} {
+func (v *BaseGoScriptVisitor) VisitCreatorName(ctx *CreatorNameContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseGoScriptVisitor) VisitConnectorCreator(ctx *ConnectorCreatorContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -217,9 +217,5 @@ func (v *BaseGoScriptVisitor) VisitPrimitiveCreator(ctx *PrimitiveCreatorContext
 }
 
 func (v *BaseGoScriptVisitor) VisitDynamicCreator(ctx *DynamicCreatorContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseGoScriptVisitor) VisitCreatorName(ctx *CreatorNameContext) interface{} {
 	return v.VisitChildren(ctx)
 }
