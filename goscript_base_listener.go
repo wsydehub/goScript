@@ -44,6 +44,12 @@ func (s *BaseGoScriptListener) EnterFormalParameterDecl(ctx *FormalParameterDecl
 // ExitFormalParameterDecl is called when production formalParameterDecl is exited.
 func (s *BaseGoScriptListener) ExitFormalParameterDecl(ctx *FormalParameterDeclContext) {}
 
+// EnterReturnType is called when production returnType is entered.
+func (s *BaseGoScriptListener) EnterReturnType(ctx *ReturnTypeContext) {}
+
+// ExitReturnType is called when production returnType is exited.
+func (s *BaseGoScriptListener) ExitReturnType(ctx *ReturnTypeContext) {}
+
 // EnterBlock is called when production block is entered.
 func (s *BaseGoScriptListener) EnterBlock(ctx *BlockContext) {}
 
@@ -91,6 +97,12 @@ func (s *BaseGoScriptListener) EnterMapInitializer(ctx *MapInitializerContext) {
 
 // ExitMapInitializer is called when production mapInitializer is exited.
 func (s *BaseGoScriptListener) ExitMapInitializer(ctx *MapInitializerContext) {}
+
+// EnterMapEntry is called when production mapEntry is entered.
+func (s *BaseGoScriptListener) EnterMapEntry(ctx *MapEntryContext) {}
+
+// ExitMapEntry is called when production mapEntry is exited.
+func (s *BaseGoScriptListener) ExitMapEntry(ctx *MapEntryContext) {}
 
 // EnterType_ is called when production type_ is entered.
 func (s *BaseGoScriptListener) EnterType_(ctx *Type_Context) {}
@@ -182,6 +194,12 @@ func (s *BaseGoScriptListener) EnterExpressionStatement(ctx *ExpressionStatement
 // ExitExpressionStatement is called when production expressionStatement is exited.
 func (s *BaseGoScriptListener) ExitExpressionStatement(ctx *ExpressionStatementContext) {}
 
+// EnterCreateAndAssignExpr is called when production CreateAndAssignExpr is entered.
+func (s *BaseGoScriptListener) EnterCreateAndAssignExpr(ctx *CreateAndAssignExprContext) {}
+
+// ExitCreateAndAssignExpr is called when production CreateAndAssignExpr is exited.
+func (s *BaseGoScriptListener) ExitCreateAndAssignExpr(ctx *CreateAndAssignExprContext) {}
+
 // EnterMulExpr is called when production MulExpr is entered.
 func (s *BaseGoScriptListener) EnterMulExpr(ctx *MulExprContext) {}
 
@@ -193,12 +211,6 @@ func (s *BaseGoScriptListener) EnterAndExpr(ctx *AndExprContext) {}
 
 // ExitAndExpr is called when production AndExpr is exited.
 func (s *BaseGoScriptListener) ExitAndExpr(ctx *AndExprContext) {}
-
-// EnterCreateAndAssignExpr is called when production CreateAndAssignExpr is entered.
-func (s *BaseGoScriptListener) EnterCreateAndAssignExpr(ctx *CreateAndAssignExprContext) {}
-
-// ExitCreateAndAssignExpr is called when production CreateAndAssignExpr is exited.
-func (s *BaseGoScriptListener) ExitCreateAndAssignExpr(ctx *CreateAndAssignExprContext) {}
 
 // EnterAddExpr is called when production AddExpr is entered.
 func (s *BaseGoScriptListener) EnterAddExpr(ctx *AddExprContext) {}
@@ -295,6 +307,18 @@ func (s *BaseGoScriptListener) EnterExpressionList(ctx *ExpressionListContext) {
 
 // ExitExpressionList is called when production expressionList is exited.
 func (s *BaseGoScriptListener) ExitExpressionList(ctx *ExpressionListContext) {}
+
+// EnterIdentifierList is called when production identifierList is entered.
+func (s *BaseGoScriptListener) EnterIdentifierList(ctx *IdentifierListContext) {}
+
+// ExitIdentifierList is called when production identifierList is exited.
+func (s *BaseGoScriptListener) ExitIdentifierList(ctx *IdentifierListContext) {}
+
+// EnterLvalue is called when production lvalue is entered.
+func (s *BaseGoScriptListener) EnterLvalue(ctx *LvalueContext) {}
+
+// ExitLvalue is called when production lvalue is exited.
+func (s *BaseGoScriptListener) ExitLvalue(ctx *LvalueContext) {}
 
 // EnterCreator is called when production creator is entered.
 func (s *BaseGoScriptListener) EnterCreator(ctx *CreatorContext) {}

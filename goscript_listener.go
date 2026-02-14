@@ -19,6 +19,9 @@ type GoScriptListener interface {
 	// EnterFormalParameterDecl is called when entering the formalParameterDecl production.
 	EnterFormalParameterDecl(c *FormalParameterDeclContext)
 
+	// EnterReturnType is called when entering the returnType production.
+	EnterReturnType(c *ReturnTypeContext)
+
 	// EnterBlock is called when entering the block production.
 	EnterBlock(c *BlockContext)
 
@@ -42,6 +45,9 @@ type GoScriptListener interface {
 
 	// EnterMapInitializer is called when entering the mapInitializer production.
 	EnterMapInitializer(c *MapInitializerContext)
+
+	// EnterMapEntry is called when entering the mapEntry production.
+	EnterMapEntry(c *MapEntryContext)
 
 	// EnterType_ is called when entering the type_ production.
 	EnterType_(c *Type_Context)
@@ -88,14 +94,14 @@ type GoScriptListener interface {
 	// EnterExpressionStatement is called when entering the expressionStatement production.
 	EnterExpressionStatement(c *ExpressionStatementContext)
 
+	// EnterCreateAndAssignExpr is called when entering the CreateAndAssignExpr production.
+	EnterCreateAndAssignExpr(c *CreateAndAssignExprContext)
+
 	// EnterMulExpr is called when entering the MulExpr production.
 	EnterMulExpr(c *MulExprContext)
 
 	// EnterAndExpr is called when entering the AndExpr production.
 	EnterAndExpr(c *AndExprContext)
-
-	// EnterCreateAndAssignExpr is called when entering the CreateAndAssignExpr production.
-	EnterCreateAndAssignExpr(c *CreateAndAssignExprContext)
 
 	// EnterAddExpr is called when entering the AddExpr production.
 	EnterAddExpr(c *AddExprContext)
@@ -145,6 +151,12 @@ type GoScriptListener interface {
 	// EnterExpressionList is called when entering the expressionList production.
 	EnterExpressionList(c *ExpressionListContext)
 
+	// EnterIdentifierList is called when entering the identifierList production.
+	EnterIdentifierList(c *IdentifierListContext)
+
+	// EnterLvalue is called when entering the lvalue production.
+	EnterLvalue(c *LvalueContext)
+
 	// EnterCreator is called when entering the creator production.
 	EnterCreator(c *CreatorContext)
 
@@ -178,6 +190,9 @@ type GoScriptListener interface {
 	// ExitFormalParameterDecl is called when exiting the formalParameterDecl production.
 	ExitFormalParameterDecl(c *FormalParameterDeclContext)
 
+	// ExitReturnType is called when exiting the returnType production.
+	ExitReturnType(c *ReturnTypeContext)
+
 	// ExitBlock is called when exiting the block production.
 	ExitBlock(c *BlockContext)
 
@@ -201,6 +216,9 @@ type GoScriptListener interface {
 
 	// ExitMapInitializer is called when exiting the mapInitializer production.
 	ExitMapInitializer(c *MapInitializerContext)
+
+	// ExitMapEntry is called when exiting the mapEntry production.
+	ExitMapEntry(c *MapEntryContext)
 
 	// ExitType_ is called when exiting the type_ production.
 	ExitType_(c *Type_Context)
@@ -247,14 +265,14 @@ type GoScriptListener interface {
 	// ExitExpressionStatement is called when exiting the expressionStatement production.
 	ExitExpressionStatement(c *ExpressionStatementContext)
 
+	// ExitCreateAndAssignExpr is called when exiting the CreateAndAssignExpr production.
+	ExitCreateAndAssignExpr(c *CreateAndAssignExprContext)
+
 	// ExitMulExpr is called when exiting the MulExpr production.
 	ExitMulExpr(c *MulExprContext)
 
 	// ExitAndExpr is called when exiting the AndExpr production.
 	ExitAndExpr(c *AndExprContext)
-
-	// ExitCreateAndAssignExpr is called when exiting the CreateAndAssignExpr production.
-	ExitCreateAndAssignExpr(c *CreateAndAssignExprContext)
 
 	// ExitAddExpr is called when exiting the AddExpr production.
 	ExitAddExpr(c *AddExprContext)
@@ -303,6 +321,12 @@ type GoScriptListener interface {
 
 	// ExitExpressionList is called when exiting the expressionList production.
 	ExitExpressionList(c *ExpressionListContext)
+
+	// ExitIdentifierList is called when exiting the identifierList production.
+	ExitIdentifierList(c *IdentifierListContext)
+
+	// ExitLvalue is called when exiting the lvalue production.
+	ExitLvalue(c *LvalueContext)
 
 	// ExitCreator is called when exiting the creator production.
 	ExitCreator(c *CreatorContext)
