@@ -1,8 +1,9 @@
 package goScript
 
 import (
-	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"reflect"
+
+	"github.com/antlr4-go/antlr/v4"
 )
 
 type Executor struct {

@@ -1,7 +1,7 @@
 package goScript
 
 import (
-	"github.com/antlr/antlr4/runtime/Go/antlr"
+	"github.com/antlr4-go/antlr/v4"
 )
 
 type GoScript struct {

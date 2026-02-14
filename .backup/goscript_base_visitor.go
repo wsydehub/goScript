@@ -1,7 +1,8 @@
-// Code generated from GoScript.g4 by ANTLR 4.13.1. DO NOT EDIT.
+// Code generated from GoScript.g4 by ANTLR 4.9.2. DO NOT EDIT.
 
 package goScript // GoScript
-import "github.com/antlr4-go/antlr/v4"
+
+import "github.com/antlr/antlr4/runtime/Go/antlr"
 
 type BaseGoScriptVisitor struct {
 	*antlr.BaseParseTreeVisitor
