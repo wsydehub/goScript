@@ -2,6 +2,7 @@ package goScript
 
 import "reflect"
 
+// VariableType represents the internal runtime type category.
 type VariableType int8
 
 const (
@@ -15,6 +16,7 @@ const (
 	VarTypeArray   VariableType = 7
 )
 
+// Variable stores name, type metadata, and value.
 type Variable struct {
 	Name   string
 	Type   VariableType
@@ -22,6 +24,7 @@ type Variable struct {
 	Value  reflect.Value
 }
 
+// NewVariable creates a variable with its runtime type and value.
 func NewVariable(name string, t VariableType, typeGo reflect.Type, value reflect.Value) *Variable {
 	return &Variable{
 		Name:   name,

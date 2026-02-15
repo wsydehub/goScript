@@ -9,12 +9,14 @@ import (
 )
 
 type Executor struct {
+	// Control flags for statement-level flow management.
 	breakFlag    bool
 	continueFlag bool
 	returnFlag   bool
 	killFlag     bool
 	returnValue  interface{}
 
+	// Runtime state for scopes, functions, and host bindings.
 	scopeStack *ScopeStack
 	funcStack  *FuncStack
 	funcMap    map[string]*FuncStack
@@ -23,6 +25,7 @@ type Executor struct {
 	GoTypeMap  map[string]reflect.Type
 }
 
+// NewExecutor builds a fresh runtime with a root scope.
 func NewExecutor() *Executor {
 	executor := &Executor{
 		scopeStack: NewScopeStack(),
@@ -36,10 +39,12 @@ func NewExecutor() *Executor {
 	return executor
 }
 
+// RegisterFunc binds a Go function into the script runtime.
 func (e *Executor) RegisterFunc(name string, fn interface{}) {
 	e.GoVarMap[name] = reflect.ValueOf(fn)
 }
 
+// RegisterConnector binds a Go type prototype for connector<...> creation.
 func (e *Executor) RegisterConnector(name string, prototype interface{}) {
 	if prototype == nil {
 		return
@@ -69,6 +74,7 @@ func (e *Executor) Visit(tree antlr.ParseTree) interface{} {
 	return tree.Accept(e)
 }
 
+// VisitChildren stops traversal early when control-flow flags are set.
 func (e *Executor) VisitChildren(node antlr.RuleNode) interface{} {
 	var result interface{}
 	for i := 0; i < node.GetChildCount(); i++ {
@@ -95,6 +101,7 @@ func (e *Executor) VisitErrorNode(node antlr.ErrorNode) interface{} {
 }
 
 func (e *Executor) VisitCompilationUnit(ctx *CompilationUnitContext) interface{} {
+	// Top-level: register variables and functions.
 	for _, v := range ctx.AllVariableDeclaration() {
 		v.Accept(e)
 	}
@@ -104,6 +111,7 @@ func (e *Executor) VisitCompilationUnit(ctx *CompilationUnitContext) interface{}
 	return nil
 }
 
+// VisitFunctionDeclaration registers a script-level function definition.
 func (e *Executor) VisitFunctionDeclaration(ctx *FunctionDeclarationContext) interface{} {
 	name := ctx.Identifier().GetText()
 	var params []*Variable
@@ -156,6 +164,7 @@ func (e *Executor) VisitReturnType(ctx *ReturnTypeContext) interface{} {
 }
 
 func (e *Executor) VisitBlock(ctx *BlockContext) interface{} {
+	// Each block introduces a new scope.
 	e.PushScope(NewScope(CommonScopeType))
 	defer e.PopScope()
 	return e.VisitChildren(ctx)
@@ -166,6 +175,7 @@ func (e *Executor) VisitBlockStatement(ctx *BlockStatementContext) interface{} {
 }
 
 func (e *Executor) VisitVariableDeclaration(ctx *VariableDeclarationContext) interface{} {
+	// Declare typed variables with optional initializer.
 	varType, typeGo := e.typeFromText(ctx.Type_().GetText())
 	for _, decl := range ctx.VariableDeclarators().AllVariableDeclarator() {
 		declCtx := decl.(*VariableDeclaratorContext)
@@ -278,6 +288,7 @@ func (e *Executor) VisitIfStatement(ctx *IfStatementContext) interface{} {
 }
 
 func (e *Executor) VisitForStatement(ctx *ForStatementContext) interface{} {
+	// for(init; cond; update) with per-iteration scope and flags.
 	ctrl := ctx.ForControl()
 	if ctrl != nil {
 		if ctrl.ForInit() != nil {
@@ -321,6 +332,7 @@ func (e *Executor) VisitForUpdate(ctx *ForUpdateContext) interface{} {
 }
 
 func (e *Executor) VisitReturnStatement(ctx *ReturnStatementContext) interface{} {
+	// Set return flag and capture value for the current function.
 	if ctx.Expression() != nil {
 		e.returnValue = ctx.Expression().Accept(e)
 		e.returnFlag = true
@@ -467,6 +479,7 @@ func (e *Executor) VisitIndexExpr(ctx *IndexExprContext) interface{} {
 }
 
 func (e *Executor) VisitAssignExpr(ctx *AssignExprContext) interface{} {
+	// Assignment supports identifiers, index, and selector lvalues.
 	lhs := ctx.AllLvalue()
 	rhs := ctx.AllExpression()
 	values := make([]interface{}, 0, len(rhs))
@@ -597,6 +610,7 @@ func (e *Executor) VisitCreateExpr(ctx *CreateExprContext) interface{} {
 }
 
 func (e *Executor) VisitSelfAddExpr(ctx *SelfAddExprContext) interface{} {
+	// Post ++/-- on assignable expressions.
 	expr := ctx.Expression()
 	op := "++"
 	if strings.HasSuffix(ctx.GetText(), "--") {
@@ -628,6 +642,7 @@ func (e *Executor) VisitSelfAddExpr(ctx *SelfAddExprContext) interface{} {
 	return cur
 }
 
+// resolveExprLValue returns getter/setter for assignable expression forms.
 func (e *Executor) resolveExprLValue(expr IExpressionContext) (func() interface{}, func(interface{}), bool) {
 	switch t := expr.(type) {
 	case *PrimaryExprContext:
@@ -738,6 +753,7 @@ func (e *Executor) VisitPrimaryExpr(ctx *PrimaryExprContext) interface{} {
 }
 
 func (e *Executor) VisitCallExpr(ctx *CallExprContext) interface{} {
+	// Call order: selector-method, script function, Go binding.
 	if sel, ok := ctx.Expression().(*SelectorExprContext); ok {
 		base := sel.Expression().Accept(e)
 		field := sel.Identifier().GetText()
@@ -780,6 +796,7 @@ func (e *Executor) getScriptFunction(name string) *Function {
 }
 
 func (e *Executor) callScriptFunction(fn *Function, list IExpressionListContext) interface{} {
+	// Execute script function in its own function scope.
 	args := e.evalArgs(list)
 	callFn := NewFunction(fn.Name, e.cloneVars(fn.ParametersList), e.cloneVars(fn.ResultsList), NewScope(FuncScopeType), fn.Block)
 	for i, param := range callFn.ParametersList {
@@ -859,6 +876,7 @@ func (e *Executor) evalArgs(list IExpressionListContext) []interface{} {
 }
 
 func (e *Executor) callReflectFunc(fn reflect.Value, list IExpressionListContext) interface{} {
+	// Execute Go function via reflection with basic coercion.
 	if !fn.IsValid() || fn.Kind() != reflect.Func {
 		return nil
 	}
@@ -986,6 +1004,7 @@ func (e *Executor) VisitCreatorName(ctx *CreatorNameContext) interface{} {
 }
 
 func (e *Executor) VisitConnectorCreator(ctx *ConnectorCreatorContext) interface{} {
+	// Instantiate a connector by registered Go type prototype.
 	if ctx.ConnectorType() == nil {
 		return nil
 	}
@@ -1015,6 +1034,7 @@ func (e *Executor) VisitDynamicCreator(ctx *DynamicCreatorContext) interface{} {
 }
 
 func (e *Executor) typeFromText(text string) (VariableType, reflect.Type) {
+	// Map grammar type text to internal variable type and Go type.
 	if strings.Contains(text, "map<") {
 		return VarTypeMap, reflect.TypeOf(map[interface{}]interface{}(nil))
 	}
@@ -1085,6 +1105,7 @@ func (e *Executor) coerceValue(value interface{}, t VariableType) interface{} {
 }
 
 func (e *Executor) addVar(v *Variable) {
+	// Add variable into the current scope, or fallback to global map.
 	if e.scopeStack != nil && len(e.scopeStack.stack) > 0 {
 		e.scopeStack.stack[len(e.scopeStack.stack)-1].AddVar(v)
 		return
@@ -1093,6 +1114,7 @@ func (e *Executor) addVar(v *Variable) {
 }
 
 func (e *Executor) lookupVar(name string) *Variable {
+	// Resolve variable by walking scopes from inner to outer.
 	if e.scopeStack != nil {
 		for i := len(e.scopeStack.stack) - 1; i >= 0; i-- {
 			if v := e.scopeStack.stack[i].GetVar(name); v != nil {

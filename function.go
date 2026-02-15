@@ -2,6 +2,7 @@ package goScript
 
 import "fmt"
 
+// Function represents a script-level function definition.
 type Function struct {
 	Name           string
 	ParametersList []*Variable
@@ -10,6 +11,7 @@ type Function struct {
 	Block          *BlockContext
 }
 
+// NewFunction creates a function model with its scope and block body.
 func NewFunction(name string, params, results []*Variable, scope *Scope, block *BlockContext) *Function {
 	return &Function{
 		Name:           name,
@@ -20,6 +22,7 @@ func NewFunction(name string, params, results []*Variable, scope *Scope, block *
 	}
 }
 
+// InitParam binds call arguments into the function scope.
 func (t *Function) InitParam(params []*Variable) error {
 	if len(params) != len(t.ParametersList) {
 		return fmt.Errorf("[InitParam] params's len is not equal")
@@ -37,12 +40,14 @@ func (t *Function) InitParam(params []*Variable) error {
 	return nil
 }
 
+// Exec runs the function body within its scope.
 func (t *Function) Exec(visitor *Executor) {
 	visitor.PushFunc(t)
 	t.Block.Accept(visitor)
 	visitor.PopFunc()
 }
 
+// SetResult assigns output values to declared result slots.
 func (t *Function) SetResult(results []*Variable) error {
 	if len(results) != len(t.ResultsList) {
 		return fmt.Errorf("[SetResult] results's len is not equal")
