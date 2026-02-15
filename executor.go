@@ -384,6 +384,10 @@ func (e *Executor) VisitCreateAndAssignExpr(ctx *CreateAndAssignExprContext) int
 	for _, r := range rhs {
 		values = append(values, r.Accept(e))
 	}
+	// Expand a single multi-return value into multiple declarations.
+	if len(ids) > 1 {
+		values = e.expandAssignValues(len(ids), values)
+	}
 	for i, id := range ids {
 		name := id.GetText()
 		val := interface{}(nil)
@@ -479,90 +483,36 @@ func (e *Executor) VisitIndexExpr(ctx *IndexExprContext) interface{} {
 }
 
 func (e *Executor) VisitAssignExpr(ctx *AssignExprContext) interface{} {
-	// Assignment supports identifiers, index, and selector lvalues.
 	lhs := ctx.AllLvalue()
 	rhs := ctx.AllExpression()
 	values := make([]interface{}, 0, len(rhs))
 	for _, r := range rhs {
 		values = append(values, r.Accept(e))
 	}
+	// Expand a single multi-return value into multiple assignments.
+	if len(lhs) > 1 {
+		values = e.expandAssignValues(len(lhs), values)
+	}
 	write := func(l ILvalueContext, val interface{}) {
-		if l.Expression() != nil && l.Lvalue() != nil {
-			base := l.Lvalue()
-			idxVal := l.Expression().Accept(e)
-			for base.Lvalue() != nil && base.Expression() != nil {
-				base = base.Lvalue()
-			}
-			baseName := base.Identifier().GetText()
-			v := e.lookupVar(baseName)
-			if v == nil {
-				return
-			}
-			container := v.Value.Interface()
-			switch c := container.(type) {
-			case []interface{}:
-				i, _ := e.toInt64(idxVal)
-				if int(i) >= 0 && int(i) < len(c) {
-					c[int(i)] = val
-					v.Value = reflect.ValueOf(c)
-				}
-			case map[interface{}]interface{}:
-				c[idxVal] = val
-				v.Value = reflect.ValueOf(c)
-			case map[string]interface{}:
-				if s, ok := idxVal.(string); ok {
-					c[s] = val
-					v.Value = reflect.ValueOf(c)
-				}
-			}
+		name, steps, ok := e.lvalueToSteps(l)
+		if !ok {
 			return
 		}
-		if l.Lvalue() != nil && l.Identifier() != nil {
-			base := l.Lvalue()
-			for base.Lvalue() != nil && base.Expression() != nil {
-				base = base.Lvalue()
-			}
-			baseName := base.Identifier().GetText()
-			v := e.lookupVar(baseName)
-			if v == nil {
-				return
-			}
-			container := v.Value.Interface()
-			field := l.Identifier().GetText()
-			switch c := container.(type) {
-			case map[interface{}]interface{}:
-				c[field] = val
-				v.Value = reflect.ValueOf(c)
-			case map[string]interface{}:
-				c[field] = val
-				v.Value = reflect.ValueOf(c)
-			default:
-				rv := reflect.ValueOf(container)
-				if rv.Kind() == reflect.Ptr {
-					if rv.Elem().Kind() == reflect.Struct {
-						f := rv.Elem().FieldByName(field)
-						if f.IsValid() && f.CanSet() {
-							fv := reflect.ValueOf(val)
-							if fv.IsValid() && fv.Type().AssignableTo(f.Type()) {
-								f.Set(fv)
-							} else if fv.IsValid() && fv.Type().ConvertibleTo(f.Type()) {
-								f.Set(fv.Convert(f.Type()))
-							}
-						}
-					}
-				}
-			}
-			return
-		}
-		if l.Identifier() != nil {
-			name := l.Identifier().GetText()
-			v := e.lookupVar(name)
+		v := e.lookupVar(name)
+		if len(steps) == 0 {
 			if v == nil {
 				e.addVar(NewVariable(name, VarTypeDynamic, reflect.TypeOf((*interface{})(nil)).Elem(), e.valueFromInterface(val)))
 			} else {
 				v.Value = e.valueFromInterface(val)
 			}
 			return
+		}
+		if v == nil {
+			return
+		}
+		updated, ok := e.setLvaluePath(v.Value.Interface(), steps, val)
+		if ok {
+			v.Value = e.valueFromInterface(updated)
 		}
 	}
 	for i := 0; i < len(lhs); i++ {
@@ -578,6 +528,172 @@ func (e *Executor) VisitAssignExpr(ctx *AssignExprContext) interface{} {
 		return values[len(values)-1]
 	}
 	return nil
+}
+
+type lvalueStep struct {
+	kind string
+	key  interface{}
+}
+
+func (e *Executor) expandAssignValues(lhsCount int, values []interface{}) []interface{} {
+	if lhsCount <= 1 || len(values) != 1 {
+		return values
+	}
+	if items, ok := values[0].([]interface{}); ok {
+		return items
+	}
+	return values
+}
+
+func (e *Executor) lvalueToSteps(l ILvalueContext) (string, []lvalueStep, bool) {
+	if l == nil {
+		return "", nil, false
+	}
+	if l.Lvalue() == nil && l.Expression() == nil && l.Identifier() != nil {
+		return l.Identifier().GetText(), nil, true
+	}
+	if l.Lvalue() != nil {
+		name, steps, ok := e.lvalueToSteps(l.Lvalue())
+		if !ok {
+			return "", nil, false
+		}
+		if l.Expression() != nil {
+			idx := l.Expression().Accept(e)
+			return name, append(steps, lvalueStep{kind: "index", key: idx}), true
+		}
+		if l.Identifier() != nil {
+			return name, append(steps, lvalueStep{kind: "field", key: l.Identifier().GetText()}), true
+		}
+	}
+	return "", nil, false
+}
+
+func (e *Executor) setLvaluePath(container interface{}, steps []lvalueStep, val interface{}) (interface{}, bool) {
+	if len(steps) == 0 {
+		return val, true
+	}
+	step := steps[0]
+	last := len(steps) == 1
+	switch c := container.(type) {
+	case []interface{}:
+		if step.kind != "index" {
+			return container, false
+		}
+		i, ok := e.toInt64(step.key)
+		if !ok {
+			return container, false
+		}
+		if int(i) < 0 || int(i) >= len(c) {
+			return container, false
+		}
+		if last {
+			c[int(i)] = val
+			return c, true
+		}
+		updated, ok := e.setLvaluePath(c[int(i)], steps[1:], val)
+		if ok {
+			c[int(i)] = updated
+			return c, true
+		}
+		return c, false
+	case map[interface{}]interface{}:
+		key := step.key
+		if last {
+			c[key] = val
+			return c, true
+		}
+		child, ok := c[key]
+		if !ok {
+			return c, false
+		}
+		updated, ok := e.setLvaluePath(child, steps[1:], val)
+		if ok {
+			c[key] = updated
+			return c, true
+		}
+		return c, false
+	case map[string]interface{}:
+		key, ok := step.key.(string)
+		if !ok {
+			return c, false
+		}
+		if last {
+			c[key] = val
+			return c, true
+		}
+		child, ok := c[key]
+		if !ok {
+			return c, false
+		}
+		updated, ok := e.setLvaluePath(child, steps[1:], val)
+		if ok {
+			c[key] = updated
+			return c, true
+		}
+		return c, false
+	}
+	rv := reflect.ValueOf(container)
+	if rv.Kind() == reflect.Ptr {
+		if rv.IsNil() {
+			return container, false
+		}
+		rv = rv.Elem()
+	}
+	if rv.Kind() != reflect.Struct {
+		return container, false
+	}
+	if step.kind != "field" {
+		return container, false
+	}
+	field, ok := step.key.(string)
+	if !ok {
+		return container, false
+	}
+	fv := rv.FieldByName(field)
+	if !fv.IsValid() {
+		return container, false
+	}
+	if last {
+		if !fv.CanSet() {
+			return container, false
+		}
+		valRv := reflect.ValueOf(val)
+		if !valRv.IsValid() {
+			fv.Set(reflect.Zero(fv.Type()))
+			return container, true
+		}
+		if valRv.Type().AssignableTo(fv.Type()) {
+			fv.Set(valRv)
+			return container, true
+		}
+		if valRv.Type().ConvertibleTo(fv.Type()) {
+			fv.Set(valRv.Convert(fv.Type()))
+			return container, true
+		}
+		return container, false
+	}
+	child := fv.Interface()
+	updated, ok := e.setLvaluePath(child, steps[1:], val)
+	if !ok {
+		return container, false
+	}
+	if !fv.CanSet() {
+		return container, false
+	}
+	uv := reflect.ValueOf(updated)
+	if !uv.IsValid() {
+		fv.Set(reflect.Zero(fv.Type()))
+		return container, true
+	}
+	if uv.Type().AssignableTo(fv.Type()) {
+		fv.Set(uv)
+		return container, true
+	}
+	if uv.Type().ConvertibleTo(fv.Type()) {
+		fv.Set(uv.Convert(fv.Type()))
+		return container, true
+	}
+	return container, false
 }
 
 func (e *Executor) VisitSelectorExpr(ctx *SelectorExprContext) interface{} {
@@ -757,6 +873,11 @@ func (e *Executor) VisitCallExpr(ctx *CallExprContext) interface{} {
 	if sel, ok := ctx.Expression().(*SelectorExprContext); ok {
 		base := sel.Expression().Accept(e)
 		field := sel.Identifier().GetText()
+		if caller := NewGoCaller(base); caller != nil {
+			if out, ok := caller.CallFunc(field, e.evalArgs(ctx.ExpressionList())); ok {
+				return out
+			}
+		}
 		bv := reflect.ValueOf(base)
 		if bv.IsValid() {
 			method := bv.MethodByName(field)

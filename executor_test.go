@@ -15,6 +15,11 @@ func (c *SampleConnector) Inc() {
 	c.Count++
 }
 
+func (c *SampleConnector) Add(v int64) int64 {
+	c.Count += v
+	return c.Count
+}
+
 func runCompilationUnit(executor *Executor, code string) {
 	input := antlr.NewInputStream(code)
 	lexer := NewGoScriptLexer(input)
@@ -245,12 +250,76 @@ func TestConnector(t *testing.T) {
 	executor.RegisterConnector("SampleConnector", &SampleConnector{})
 	runStatement(executor, "c := new connector<SampleConnector>();")
 	runStatement(executor, "c.Inc();")
+	runStatement(executor, "r := c.Add(3);")
 	runStatement(executor, "z := c.Count;")
-	v := getVar(executor, "z")
-	if v == nil {
-		t.Fatalf("var z not found")
+	r := getVar(executor, "r")
+	z := getVar(executor, "z")
+	if r == nil || z == nil {
+		t.Fatalf("var r/z not found")
 	}
-	if toInt64Test(v.Value.Interface()) != 1 {
-		t.Fatalf("expect 1, got %v", v.Value.Interface())
+	if toInt64Test(r.Value.Interface()) != 4 {
+		t.Fatalf("expect 4, got %v", r.Value.Interface())
+	}
+	if toInt64Test(z.Value.Interface()) != 4 {
+		t.Fatalf("expect 4, got %v", z.Value.Interface())
+	}
+}
+
+func TestComplexLValueAssign(t *testing.T) {
+	executor := NewExecutor()
+	runStatement(executor, `m := new map<string,dynamic> {"a": new map<string,dynamic> {"b": new int[] {1,2}}};`)
+	runStatement(executor, `m["a"].b[1] = 7;`)
+	v := getVar(executor, "m")
+	if v == nil {
+		t.Fatalf("var m not found")
+	}
+	root, ok := v.Value.Interface().(map[interface{}]interface{})
+	if !ok {
+		t.Fatalf("m type invalid")
+	}
+	a, ok := root["a"].(map[interface{}]interface{})
+	if !ok {
+		t.Fatalf("nested map invalid")
+	}
+	b, ok := a["b"].([]interface{})
+	if !ok {
+		t.Fatalf("nested array invalid")
+	}
+	if toInt64Test(b[1]) != 7 {
+		t.Fatalf("expect 7, got %v", b[1])
+	}
+}
+
+func TestMultiReturnAssign(t *testing.T) {
+	executor := NewExecutor()
+	executor.RegisterFunc("pair", func(a int64) (int64, int64) { return a, a + 1 })
+	runStatement(executor, "x := 0; y := 0;")
+	runStatement(executor, "x, y = pair(1);")
+	vx := getVar(executor, "x")
+	vy := getVar(executor, "y")
+	if vx == nil || vy == nil {
+		t.Fatalf("vars x/y not found")
+	}
+	if toInt64Test(vx.Value.Interface()) != 1 || toInt64Test(vy.Value.Interface()) != 2 {
+		t.Fatalf("expect 1,2 got %v,%v", vx.Value.Interface(), vy.Value.Interface())
+	}
+	runStatement(executor, "a, b := pair(3);")
+	va := getVar(executor, "a")
+	vb := getVar(executor, "b")
+	if va == nil || vb == nil {
+		t.Fatalf("vars a/b not found")
+	}
+	if toInt64Test(va.Value.Interface()) != 3 || toInt64Test(vb.Value.Interface()) != 4 {
+		t.Fatalf("expect 3,4 got %v,%v", va.Value.Interface(), vb.Value.Interface())
+	}
+	runCompilationUnit(executor, "func pair2(int a) (int,int) { return new int[] {a, a + 2}; }")
+	runStatement(executor, "m, n := pair2(5);")
+	vm := getVar(executor, "m")
+	vn := getVar(executor, "n")
+	if vm == nil || vn == nil {
+		t.Fatalf("vars m/n not found")
+	}
+	if toInt64Test(vm.Value.Interface()) != 5 || toInt64Test(vn.Value.Interface()) != 7 {
+		t.Fatalf("expect 5,7 got %v,%v", vm.Value.Interface(), vn.Value.Interface())
 	}
 }
