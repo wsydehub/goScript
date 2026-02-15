@@ -7,6 +7,14 @@ import (
 	"github.com/antlr4-go/antlr/v4"
 )
 
+type SampleConnector struct {
+	Count int64
+}
+
+func (c *SampleConnector) Inc() {
+	c.Count++
+}
+
 func runCompilationUnit(executor *Executor, code string) {
 	input := antlr.NewInputStream(code)
 	lexer := NewGoScriptLexer(input)
@@ -148,5 +156,101 @@ func TestCallExpr(t *testing.T) {
 	}
 	if toInt64Test(v.Value.Interface()) != 3 {
 		t.Fatalf("expect 3, got %v", v.Value.Interface())
+	}
+}
+
+func TestVariableInitializer(t *testing.T) {
+	executor := NewExecutor()
+	runCompilationUnit(executor, "int[] arr = {1,2}; map<int,int> m = {1:2,3:4};")
+	arrVar := getVar(executor, "arr")
+	if arrVar == nil {
+		t.Fatalf("var arr not found")
+	}
+	arr, ok := arrVar.Value.Interface().([]interface{})
+	if !ok {
+		t.Fatalf("arr type invalid")
+	}
+	if toInt64Test(arr[0]) != 1 || toInt64Test(arr[1]) != 2 {
+		t.Fatalf("arr value invalid")
+	}
+	mVar := getVar(executor, "m")
+	if mVar == nil {
+		t.Fatalf("var m not found")
+	}
+	m, ok := mVar.Value.Interface().(map[interface{}]interface{})
+	if !ok {
+		t.Fatalf("m type invalid")
+	}
+	if toInt64Test(m[int64(1)]) != 2 || toInt64Test(m[int64(3)]) != 4 {
+		t.Fatalf("map value invalid")
+	}
+}
+
+func TestContinue(t *testing.T) {
+	executor := NewExecutor()
+	runStatement(executor, "i := 0;")
+	runStatement(executor, "sum := 0;")
+	runStatement(executor, "for(; i < 5; i = i + 1) { if i == 2 { continue; } sum = sum + i; }")
+	v := getVar(executor, "sum")
+	if v == nil {
+		t.Fatalf("var sum not found")
+	}
+	if toInt64Test(v.Value.Interface()) != 8 {
+		t.Fatalf("expect 8, got %v", v.Value.Interface())
+	}
+}
+
+func TestSelfAddSub(t *testing.T) {
+	executor := NewExecutor()
+	runStatement(executor, "x := 2;")
+	runStatement(executor, "x--;")
+	runStatement(executor, "x++;")
+	v := getVar(executor, "x")
+	if v == nil {
+		t.Fatalf("var x not found")
+	}
+	if toInt64Test(v.Value.Interface()) != 2 {
+		t.Fatalf("expect 2, got %v", v.Value.Interface())
+	}
+	runStatement(executor, "arr := new int[] {1,2};")
+	runStatement(executor, "arr[0]++;")
+	arrVar := getVar(executor, "arr")
+	if arrVar == nil {
+		t.Fatalf("var arr not found")
+	}
+	arr, ok := arrVar.Value.Interface().([]interface{})
+	if !ok {
+		t.Fatalf("arr type invalid")
+	}
+	if toInt64Test(arr[0]) != 2 {
+		t.Fatalf("expect 2, got %v", arr[0])
+	}
+}
+
+func TestScriptFunction(t *testing.T) {
+	executor := NewExecutor()
+	runCompilationUnit(executor, "func add(int a, int b) int { return a + b; }")
+	runStatement(executor, "y := add(1,2);")
+	v := getVar(executor, "y")
+	if v == nil {
+		t.Fatalf("var y not found")
+	}
+	if toInt64Test(v.Value.Interface()) != 3 {
+		t.Fatalf("expect 3, got %v", v.Value.Interface())
+	}
+}
+
+func TestConnector(t *testing.T) {
+	executor := NewExecutor()
+	executor.RegisterConnector("SampleConnector", &SampleConnector{})
+	runStatement(executor, "c := new connector<SampleConnector>();")
+	runStatement(executor, "c.Inc();")
+	runStatement(executor, "z := c.Count;")
+	v := getVar(executor, "z")
+	if v == nil {
+		t.Fatalf("var z not found")
+	}
+	if toInt64Test(v.Value.Interface()) != 1 {
+		t.Fatalf("expect 1, got %v", v.Value.Interface())
 	}
 }

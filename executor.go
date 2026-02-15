@@ -13,12 +13,14 @@ type Executor struct {
 	continueFlag bool
 	returnFlag   bool
 	killFlag     bool
+	returnValue  interface{}
 
 	scopeStack *ScopeStack
 	funcStack  *FuncStack
 	funcMap    map[string]*FuncStack
 	varMap     map[string]*Variable
 	GoVarMap   map[string]reflect.Value
+	GoTypeMap  map[string]reflect.Type
 }
 
 func NewExecutor() *Executor {
@@ -28,6 +30,7 @@ func NewExecutor() *Executor {
 		funcMap:    map[string]*FuncStack{},
 		varMap:     map[string]*Variable{},
 		GoVarMap:   map[string]reflect.Value{},
+		GoTypeMap:  map[string]reflect.Type{},
 	}
 	executor.scopeStack.Push(NewScope(CommonScopeType))
 	return executor
@@ -35,6 +38,13 @@ func NewExecutor() *Executor {
 
 func (e *Executor) RegisterFunc(name string, fn interface{}) {
 	e.GoVarMap[name] = reflect.ValueOf(fn)
+}
+
+func (e *Executor) RegisterConnector(name string, prototype interface{}) {
+	if prototype == nil {
+		return
+	}
+	e.GoTypeMap[name] = reflect.TypeOf(prototype)
 }
 
 func (e *Executor) PushFunc(f *Function) {
@@ -62,9 +72,15 @@ func (e *Executor) Visit(tree antlr.ParseTree) interface{} {
 func (e *Executor) VisitChildren(node antlr.RuleNode) interface{} {
 	var result interface{}
 	for i := 0; i < node.GetChildCount(); i++ {
+		if e.returnFlag || e.breakFlag || e.continueFlag || e.killFlag {
+			break
+		}
 		child := node.GetChild(i)
 		if childTree, ok := child.(antlr.ParseTree); ok {
 			result = childTree.Accept(e)
+		}
+		if e.returnFlag || e.breakFlag || e.continueFlag || e.killFlag {
+			break
 		}
 	}
 	return result
@@ -89,19 +105,54 @@ func (e *Executor) VisitCompilationUnit(ctx *CompilationUnitContext) interface{}
 }
 
 func (e *Executor) VisitFunctionDeclaration(ctx *FunctionDeclarationContext) interface{} {
+	name := ctx.Identifier().GetText()
+	var params []*Variable
+	if ctx.FormalParameters() != nil {
+		for _, p := range ctx.FormalParameters().(*FormalParametersContext).AllFormalParameterDecl() {
+			if v, ok := p.Accept(e).(*Variable); ok {
+				params = append(params, v)
+			}
+		}
+	}
+	var results []*Variable
+	if ctx.ReturnType() != nil {
+		rt := ctx.ReturnType().(*ReturnTypeContext)
+		for _, t := range rt.AllType_() {
+			varType, typeGo := e.typeFromText(t.GetText())
+			results = append(results, NewVariable("", varType, typeGo, reflect.Zero(typeGo)))
+		}
+	}
+	fn := NewFunction(name, params, results, NewScope(FuncScopeType), ctx.Block().(*BlockContext))
+	stack := e.funcMap[name]
+	if stack == nil {
+		stack = NewFuncStack()
+		e.funcMap[name] = stack
+	}
+	stack.Push(fn)
 	return nil
 }
 
 func (e *Executor) VisitFormalParameters(ctx *FormalParametersContext) interface{} {
-	return nil
+	params := make([]*Variable, 0, len(ctx.AllFormalParameterDecl()))
+	for _, p := range ctx.AllFormalParameterDecl() {
+		if v, ok := p.Accept(e).(*Variable); ok {
+			params = append(params, v)
+		}
+	}
+	return params
 }
 
 func (e *Executor) VisitFormalParameterDecl(ctx *FormalParameterDeclContext) interface{} {
-	return nil
+	varType, typeGo := e.typeFromText(ctx.Type_().GetText())
+	return NewVariable(ctx.Identifier().GetText(), varType, typeGo, reflect.Zero(typeGo))
 }
 
 func (e *Executor) VisitReturnType(ctx *ReturnTypeContext) interface{} {
-	return ctx.GetText()
+	types := make([]string, 0, len(ctx.AllType_()))
+	for _, t := range ctx.AllType_() {
+		types = append(types, t.GetText())
+	}
+	return types
 }
 
 func (e *Executor) VisitBlock(ctx *BlockContext) interface{} {
@@ -157,6 +208,12 @@ func (e *Executor) VisitVariableDeclarator(ctx *VariableDeclaratorContext) inter
 func (e *Executor) VisitVariableInitializer(ctx *VariableInitializerContext) interface{} {
 	if ctx.Expression() != nil {
 		return ctx.Expression().Accept(e)
+	}
+	if ctx.ArrayInitializer() != nil {
+		return ctx.ArrayInitializer().Accept(e)
+	}
+	if ctx.MapInitializer() != nil {
+		return ctx.MapInitializer().Accept(e)
 	}
 	return nil
 }
@@ -238,8 +295,11 @@ func (e *Executor) VisitForStatement(ctx *ForStatementContext) interface{} {
 		e.continueFlag = false
 		ctx.Statement().Accept(e)
 		e.PopScope()
-		if e.killFlag || e.breakFlag {
+		if e.returnFlag || e.killFlag || e.breakFlag {
 			break
+		}
+		if e.continueFlag {
+			e.continueFlag = false
 		}
 		if ctrl != nil && ctrl.ForUpdate() != nil {
 			ctrl.ForUpdate().Accept(e)
@@ -262,8 +322,12 @@ func (e *Executor) VisitForUpdate(ctx *ForUpdateContext) interface{} {
 
 func (e *Executor) VisitReturnStatement(ctx *ReturnStatementContext) interface{} {
 	if ctx.Expression() != nil {
-		return ctx.Expression().Accept(e)
+		e.returnValue = ctx.Expression().Accept(e)
+		e.returnFlag = true
+		return e.returnValue
 	}
+	e.returnValue = nil
+	e.returnFlag = true
 	return nil
 }
 
@@ -459,6 +523,21 @@ func (e *Executor) VisitAssignExpr(ctx *AssignExprContext) interface{} {
 			case map[string]interface{}:
 				c[field] = val
 				v.Value = reflect.ValueOf(c)
+			default:
+				rv := reflect.ValueOf(container)
+				if rv.Kind() == reflect.Ptr {
+					if rv.Elem().Kind() == reflect.Struct {
+						f := rv.Elem().FieldByName(field)
+						if f.IsValid() && f.CanSet() {
+							fv := reflect.ValueOf(val)
+							if fv.IsValid() && fv.Type().AssignableTo(f.Type()) {
+								f.Set(fv)
+							} else if fv.IsValid() && fv.Type().ConvertibleTo(f.Type()) {
+								f.Set(fv.Convert(f.Type()))
+							}
+						}
+					}
+				}
 			}
 			return
 		}
@@ -519,29 +598,139 @@ func (e *Executor) VisitCreateExpr(ctx *CreateExprContext) interface{} {
 
 func (e *Executor) VisitSelfAddExpr(ctx *SelfAddExprContext) interface{} {
 	expr := ctx.Expression()
-	name := expr.GetText()
-	if strings.IndexByte(name, '.') == -1 && strings.IndexByte(name, '[') == -1 {
-		v := e.lookupVar(name)
-		if v != nil {
-			switch v.Value.Interface().(type) {
-			case int64:
-				cur, _ := e.toInt64(v.Value.Interface())
-				v.Value = reflect.ValueOf(cur + 1)
-				return cur + 1
-			case float64:
-				f, _ := e.toFloat64(v.Value.Interface())
-				v.Value = reflect.ValueOf(f + 1)
-				return f + 1
+	op := "++"
+	if strings.HasSuffix(ctx.GetText(), "--") {
+		op = "--"
+	}
+	getter, setter, ok := e.resolveExprLValue(expr)
+	if !ok {
+		return expr.Accept(e)
+	}
+	cur := getter()
+	if cur == nil {
+		return nil
+	}
+	delta := int64(1)
+	if op == "--" {
+		delta = -1
+	}
+	if _, isFloat := cur.(float64); isFloat {
+		f, _ := e.toFloat64(cur)
+		newVal := f + float64(delta)
+		setter(newVal)
+		return newVal
+	}
+	if i, ok := e.toInt64(cur); ok {
+		newVal := i + delta
+		setter(newVal)
+		return newVal
+	}
+	return cur
+}
+
+func (e *Executor) resolveExprLValue(expr IExpressionContext) (func() interface{}, func(interface{}), bool) {
+	switch t := expr.(type) {
+	case *PrimaryExprContext:
+		if t.Primary() != nil && t.Primary().Identifier() != nil {
+			name := t.Primary().Identifier().GetText()
+			v := e.lookupVar(name)
+			if v == nil {
+				return nil, nil, false
+			}
+			return func() interface{} {
+					if v.Value.IsValid() {
+						return v.Value.Interface()
+					}
+					return nil
+				}, func(val interface{}) {
+					v.Value = e.valueFromInterface(val)
+				}, true
+		}
+	case *IndexExprContext:
+		base := t.Expression(0).Accept(e)
+		index := t.Expression(1).Accept(e)
+		getter := func() interface{} {
+			switch c := base.(type) {
+			case []interface{}:
+				i, _ := e.toInt64(index)
+				if int(i) >= 0 && int(i) < len(c) {
+					return c[int(i)]
+				}
+				return nil
+			case map[interface{}]interface{}:
+				return c[index]
+			case map[string]interface{}:
+				if s, ok := index.(string); ok {
+					return c[s]
+				}
+				return nil
 			default:
-				cur, ok := e.toInt64(v.Value.Interface())
-				if ok {
-					v.Value = reflect.ValueOf(cur + 1)
-					return cur + 1
+				return nil
+			}
+		}
+		setter := func(val interface{}) {
+			switch c := base.(type) {
+			case []interface{}:
+				i, _ := e.toInt64(index)
+				if int(i) >= 0 && int(i) < len(c) {
+					c[int(i)] = val
+				}
+			case map[interface{}]interface{}:
+				c[index] = val
+			case map[string]interface{}:
+				if s, ok := index.(string); ok {
+					c[s] = val
 				}
 			}
 		}
+		return getter, setter, true
+	case *SelectorExprContext:
+		base := t.Expression().Accept(e)
+		field := t.Identifier().GetText()
+		getter := func() interface{} {
+			switch c := base.(type) {
+			case map[interface{}]interface{}:
+				return c[field]
+			case map[string]interface{}:
+				return c[field]
+			}
+			v := reflect.ValueOf(base)
+			if v.Kind() == reflect.Ptr {
+				v = v.Elem()
+			}
+			if v.Kind() == reflect.Struct {
+				f := v.FieldByName(field)
+				if f.IsValid() && f.CanInterface() {
+					return f.Interface()
+				}
+			}
+			return nil
+		}
+		setter := func(val interface{}) {
+			switch c := base.(type) {
+			case map[interface{}]interface{}:
+				c[field] = val
+				return
+			case map[string]interface{}:
+				c[field] = val
+				return
+			}
+			v := reflect.ValueOf(base)
+			if v.Kind() == reflect.Ptr && v.Elem().Kind() == reflect.Struct {
+				f := v.Elem().FieldByName(field)
+				if f.IsValid() && f.CanSet() {
+					fv := reflect.ValueOf(val)
+					if fv.IsValid() && fv.Type().AssignableTo(f.Type()) {
+						f.Set(fv)
+					} else if fv.IsValid() && fv.Type().ConvertibleTo(f.Type()) {
+						f.Set(fv.Convert(f.Type()))
+					}
+				}
+			}
+		}
+		return getter, setter, true
 	}
-	return expr.Accept(e)
+	return nil, nil, false
 }
 
 func (e *Executor) VisitPrimaryExpr(ctx *PrimaryExprContext) interface{} {
@@ -549,14 +738,133 @@ func (e *Executor) VisitPrimaryExpr(ctx *PrimaryExprContext) interface{} {
 }
 
 func (e *Executor) VisitCallExpr(ctx *CallExprContext) interface{} {
+	if sel, ok := ctx.Expression().(*SelectorExprContext); ok {
+		base := sel.Expression().Accept(e)
+		field := sel.Identifier().GetText()
+		bv := reflect.ValueOf(base)
+		if bv.IsValid() {
+			method := bv.MethodByName(field)
+			if !method.IsValid() && bv.Kind() != reflect.Ptr && bv.CanAddr() {
+				method = bv.Addr().MethodByName(field)
+			}
+			if method.IsValid() {
+				return e.callReflectFunc(method, ctx.ExpressionList())
+			}
+		}
+		if m, ok := base.(map[string]interface{}); ok {
+			if fv, ok := m[field]; ok {
+				return e.callReflectFunc(reflect.ValueOf(fv), ctx.ExpressionList())
+			}
+		}
+		if m, ok := base.(map[interface{}]interface{}); ok {
+			if fv, ok := m[field]; ok {
+				return e.callReflectFunc(reflect.ValueOf(fv), ctx.ExpressionList())
+			}
+		}
+	}
 	callee := ctx.Expression().GetText()
-	fn, ok := e.GoVarMap[callee]
-	if !ok {
+	if fn := e.getScriptFunction(callee); fn != nil {
+		return e.callScriptFunction(fn, ctx.ExpressionList())
+	}
+	if fn, ok := e.GoVarMap[callee]; ok {
+		return e.callReflectFunc(fn, ctx.ExpressionList())
+	}
+	return nil
+}
+
+func (e *Executor) getScriptFunction(name string) *Function {
+	if stack, ok := e.funcMap[name]; ok && stack != nil && !stack.IsEmpty() {
+		return stack.Top()
+	}
+	return nil
+}
+
+func (e *Executor) callScriptFunction(fn *Function, list IExpressionListContext) interface{} {
+	args := e.evalArgs(list)
+	callFn := NewFunction(fn.Name, e.cloneVars(fn.ParametersList), e.cloneVars(fn.ResultsList), NewScope(FuncScopeType), fn.Block)
+	for i, param := range callFn.ParametersList {
+		var val interface{}
+		if i < len(args) {
+			val = args[i]
+		}
+		coerced := e.coerceValue(val, param.Type)
+		if coerced == nil {
+			param.Value = reflect.Zero(param.TypeGo)
+		} else {
+			rv := reflect.ValueOf(coerced)
+			if param.TypeGo != nil && rv.IsValid() && rv.Type() != param.TypeGo && rv.Type().ConvertibleTo(param.TypeGo) {
+				rv = rv.Convert(param.TypeGo)
+			}
+			param.Value = rv
+		}
+		callFn.Scope.AddVar(param)
+	}
+	prevReturnFlag := e.returnFlag
+	prevReturnValue := e.returnValue
+	prevBreakFlag := e.breakFlag
+	prevContinueFlag := e.continueFlag
+	prevKillFlag := e.killFlag
+	e.returnFlag = false
+	e.returnValue = nil
+	e.breakFlag = false
+	e.continueFlag = false
+	e.killFlag = false
+	e.PushFunc(callFn)
+	callFn.Block.Accept(e)
+	e.PopFunc()
+	ret := e.returnValue
+	e.returnFlag = prevReturnFlag
+	e.returnValue = prevReturnValue
+	e.breakFlag = prevBreakFlag
+	e.continueFlag = prevContinueFlag
+	e.killFlag = prevKillFlag
+	if len(callFn.ResultsList) == 0 {
+		return nil
+	}
+	if len(callFn.ResultsList) == 1 {
+		return e.coerceValue(ret, callFn.ResultsList[0].Type)
+	}
+	if items, ok := ret.([]interface{}); ok {
+		out := make([]interface{}, 0, len(callFn.ResultsList))
+		for i, res := range callFn.ResultsList {
+			var v interface{}
+			if i < len(items) {
+				v = e.coerceValue(items[i], res.Type)
+			}
+			out = append(out, v)
+		}
+		return out
+	}
+	return ret
+}
+
+func (e *Executor) cloneVars(vars []*Variable) []*Variable {
+	out := make([]*Variable, 0, len(vars))
+	for _, v := range vars {
+		out = append(out, NewVariable(v.Name, v.Type, v.TypeGo, reflect.Zero(v.TypeGo)))
+	}
+	return out
+}
+
+func (e *Executor) evalArgs(list IExpressionListContext) []interface{} {
+	if list == nil {
+		return nil
+	}
+	exprs := list.(*ExpressionListContext).AllExpression()
+	args := make([]interface{}, 0, len(exprs))
+	for _, expr := range exprs {
+		args = append(args, expr.Accept(e))
+	}
+	return args
+}
+
+func (e *Executor) callReflectFunc(fn reflect.Value, list IExpressionListContext) interface{} {
+	if !fn.IsValid() || fn.Kind() != reflect.Func {
 		return nil
 	}
 	var args []reflect.Value
-	if ctx.ExpressionList() != nil {
-		exprs := ctx.ExpressionList().(*ExpressionListContext).AllExpression()
+	if list != nil {
+		exprs := list.(*ExpressionListContext).AllExpression()
 		args = make([]reflect.Value, 0, len(exprs))
 		for i, expr := range exprs {
 			val := expr.Accept(e)
@@ -678,7 +986,18 @@ func (e *Executor) VisitCreatorName(ctx *CreatorNameContext) interface{} {
 }
 
 func (e *Executor) VisitConnectorCreator(ctx *ConnectorCreatorContext) interface{} {
-	return nil
+	if ctx.ConnectorType() == nil {
+		return nil
+	}
+	name := ctx.ConnectorType().(*ConnectorTypeContext).Identifier().GetText()
+	t, ok := e.GoTypeMap[name]
+	if !ok || t == nil {
+		return nil
+	}
+	if t.Kind() == reflect.Ptr {
+		return reflect.New(t.Elem()).Interface()
+	}
+	return reflect.New(t).Interface()
 }
 
 func (e *Executor) VisitPrimitiveCreator(ctx *PrimitiveCreatorContext) interface{} {

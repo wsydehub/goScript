@@ -27,7 +27,7 @@ func (t *Function) InitParam(params []*Variable) error {
 
 	for i, param := range t.ParametersList {
 		inputParam := params[i]
-		if param.TypeGo != param.TypeGo {
+		if param.TypeGo != inputParam.TypeGo {
 			return fmt.Errorf("[InitParam] param type is not equal, expect: %v, actual: %v", param.TypeGo, inputParam.TypeGo)
 		}
 		param.Value = inputParam.Value
