@@ -126,8 +126,11 @@ func (e *Executor) VisitFunctionDeclaration(ctx *FunctionDeclarationContext) int
 	if ctx.ReturnType() != nil {
 		rt := ctx.ReturnType().(*ReturnTypeContext)
 		for _, t := range rt.AllType_() {
-			varType, typeGo := e.typeFromText(t.GetText())
-			results = append(results, NewVariable("", varType, typeGo, reflect.Zero(typeGo)))
+			typeText := t.GetText()
+			varType, typeGo := e.typeFromText(typeText)
+			v := NewVariable("", varType, typeGo, reflect.Zero(typeGo))
+			e.applyArrayMetaFromText(v, typeText)
+			results = append(results, v)
 		}
 	}
 	fn := NewFunction(name, params, results, NewScope(FuncScopeType), ctx.Block().(*BlockContext))
@@ -151,8 +154,11 @@ func (e *Executor) VisitFormalParameters(ctx *FormalParametersContext) interface
 }
 
 func (e *Executor) VisitFormalParameterDecl(ctx *FormalParameterDeclContext) interface{} {
-	varType, typeGo := e.typeFromText(ctx.Type_().GetText())
-	return NewVariable(ctx.Identifier().GetText(), varType, typeGo, reflect.Zero(typeGo))
+	typeText := ctx.Type_().GetText()
+	varType, typeGo := e.typeFromText(typeText)
+	v := NewVariable(ctx.Identifier().GetText(), varType, typeGo, reflect.Zero(typeGo))
+	e.applyArrayMetaFromText(v, typeText)
+	return v
 }
 
 func (e *Executor) VisitReturnType(ctx *ReturnTypeContext) interface{} {
@@ -176,7 +182,8 @@ func (e *Executor) VisitBlockStatement(ctx *BlockStatementContext) interface{} {
 
 func (e *Executor) VisitVariableDeclaration(ctx *VariableDeclarationContext) interface{} {
 	// Declare typed variables with optional initializer.
-	varType, typeGo := e.typeFromText(ctx.Type_().GetText())
+	typeText := ctx.Type_().GetText()
+	varType, typeGo := e.typeFromText(typeText)
 	for _, decl := range ctx.VariableDeclarators().AllVariableDeclarator() {
 		declCtx := decl.(*VariableDeclaratorContext)
 		name := declCtx.Identifier().GetText()
@@ -202,7 +209,10 @@ func (e *Executor) VisitVariableDeclaration(ctx *VariableDeclarationContext) int
 				valueRef = valueRef.Convert(actualGo)
 			}
 		}
-		e.addVar(NewVariable(name, actualType, actualGo, valueRef))
+		v := NewVariable(name, actualType, actualGo, valueRef)
+		e.applyArrayMetaFromText(v, typeText)
+		e.applyArrayMetaFromValue(v, value)
+		e.addVar(v)
 	}
 	return nil
 }
@@ -396,7 +406,9 @@ func (e *Executor) VisitCreateAndAssignExpr(ctx *CreateAndAssignExprContext) int
 		} else if len(values) > 0 {
 			val = values[len(values)-1]
 		}
-		e.addVar(NewVariable(name, VarTypeDynamic, reflect.TypeOf((*interface{})(nil)).Elem(), e.valueFromInterface(val)))
+		v := NewVariable(name, VarTypeDynamic, reflect.TypeOf((*interface{})(nil)).Elem(), e.valueFromInterface(val))
+		e.applyArrayMetaFromValue(v, val)
+		e.addVar(v)
 	}
 	if len(values) > 0 {
 		return values[len(values)-1]
@@ -501,9 +513,12 @@ func (e *Executor) VisitAssignExpr(ctx *AssignExprContext) interface{} {
 		v := e.lookupVar(name)
 		if len(steps) == 0 {
 			if v == nil {
-				e.addVar(NewVariable(name, VarTypeDynamic, reflect.TypeOf((*interface{})(nil)).Elem(), e.valueFromInterface(val)))
+				nv := NewVariable(name, VarTypeDynamic, reflect.TypeOf((*interface{})(nil)).Elem(), e.valueFromInterface(val))
+				e.applyArrayMetaFromValue(nv, val)
+				e.addVar(nv)
 			} else {
 				v.Value = e.valueFromInterface(val)
+				e.applyArrayMetaFromValue(v, val)
 			}
 			return
 		}
@@ -979,7 +994,10 @@ func (e *Executor) callScriptFunction(fn *Function, list IExpressionListContext)
 func (e *Executor) cloneVars(vars []*Variable) []*Variable {
 	out := make([]*Variable, 0, len(vars))
 	for _, v := range vars {
-		out = append(out, NewVariable(v.Name, v.Type, v.TypeGo, reflect.Zero(v.TypeGo)))
+		nv := NewVariable(v.Name, v.Type, v.TypeGo, reflect.Zero(v.TypeGo))
+		nv.ArrayDims = v.ArrayDims
+		nv.ArrayElemType = v.ArrayElemType
+		out = append(out, nv)
 	}
 	return out
 }
@@ -1157,24 +1175,24 @@ func (e *Executor) VisitDynamicCreator(ctx *DynamicCreatorContext) interface{} {
 
 func (e *Executor) typeFromText(text string) (VariableType, reflect.Type) {
 	// Map grammar type text to internal variable type and Go type.
-	if strings.Contains(text, "[]") {
+	base, dims := e.trimArraySuffix(text)
+	if dims > 0 {
 		return VarTypeArray, reflect.TypeOf([]interface{}{})
 	}
-	if strings.Contains(text, "map<") {
+	if strings.Contains(base, "map<") {
 		return VarTypeMap, reflect.TypeOf(map[interface{}]interface{}(nil))
 	}
-	if strings.Contains(text, "connector<") {
-		start := strings.Index(text, "<")
-		end := strings.LastIndex(text, ">")
+	if strings.Contains(base, "connector<") {
+		start := strings.Index(base, "<")
+		end := strings.LastIndex(base, ">")
 		if start != -1 && end != -1 && end > start+1 {
-			name := text[start+1 : end]
+			name := base[start+1 : end]
 			if t, ok := e.GoTypeMap[name]; ok && t != nil {
 				return VarTypeDynamic, t
 			}
 		}
 		return VarTypeDynamic, reflect.TypeOf((*interface{})(nil)).Elem()
 	}
-	base := strings.TrimRight(text, "[]")
 	switch base {
 	case "int", "uint":
 		return VarTypeInt, reflect.TypeOf(int64(0))
@@ -1190,6 +1208,88 @@ func (e *Executor) typeFromText(text string) (VariableType, reflect.Type) {
 		return VarTypeDynamic, reflect.TypeOf((*interface{})(nil)).Elem()
 	default:
 		return VarTypeDynamic, reflect.TypeOf((*interface{})(nil)).Elem()
+	}
+}
+
+// trimArraySuffix returns the base type text and the array dimension count.
+func (e *Executor) trimArraySuffix(text string) (string, int) {
+	dims := 0
+	for strings.HasSuffix(text, "[]") {
+		dims++
+		text = strings.TrimSuffix(text, "[]")
+	}
+	return text, dims
+}
+
+// arrayTypeInfoFromText derives array dimensions and base element type.
+func (e *Executor) arrayTypeInfoFromText(text string) (int, VariableType) {
+	base, dims := e.trimArraySuffix(text)
+	if dims == 0 {
+		return 0, VarTypeDynamic
+	}
+	if strings.Contains(base, "map<") {
+		return dims, VarTypeMap
+	}
+	if strings.Contains(base, "connector<") {
+		return dims, VarTypeDynamic
+	}
+	switch base {
+	case "int", "uint":
+		return dims, VarTypeInt
+	case "float":
+		return dims, VarTypeFloat
+	case "bool":
+		return dims, VarTypeBool
+	case "char":
+		return dims, VarTypeChar
+	case "string":
+		return dims, VarTypeString
+	case "dynamic", "error":
+		return dims, VarTypeDynamic
+	default:
+		return dims, VarTypeDynamic
+	}
+}
+
+// arrayDimsFromValue derives nested array depth from runtime values.
+func (e *Executor) arrayDimsFromValue(value interface{}) int {
+	items, ok := value.([]interface{})
+	if !ok {
+		return 0
+	}
+	maxInner := 0
+	for _, item := range items {
+		if d := e.arrayDimsFromValue(item); d > maxInner {
+			maxInner = d
+		}
+	}
+	return 1 + maxInner
+}
+
+// applyArrayMetaFromText fills array metadata from a type text if available.
+func (e *Executor) applyArrayMetaFromText(v *Variable, text string) {
+	dims, elemType := e.arrayTypeInfoFromText(text)
+	if dims == 0 {
+		return
+	}
+	v.ArrayDims = dims
+	v.ArrayElemType = elemType
+}
+
+// applyArrayMetaFromValue fills array metadata from runtime values.
+func (e *Executor) applyArrayMetaFromValue(v *Variable, value interface{}) {
+	if v.ArrayDims > 0 {
+		return
+	}
+	dims := e.arrayDimsFromValue(value)
+	if dims == 0 {
+		return
+	}
+	v.ArrayDims = dims
+	v.ArrayElemType = VarTypeDynamic
+	if v.Type == VarTypeDynamic {
+		v.Type = VarTypeArray
+		v.TypeGo = reflect.TypeOf([]interface{}{})
 	}
 }
 

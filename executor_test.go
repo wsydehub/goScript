@@ -576,6 +576,21 @@ int[] h = {5,6};
 	}
 }
 
+func TestMultiDimArrayRuntimeMeta(t *testing.T) {
+	executor := NewExecutor()
+	runCompilationUnit(executor, "int[][] grid = {{1,2},{3,4}};")
+	grid := getVar(executor, "grid")
+	if grid == nil {
+		t.Fatalf("var grid not found")
+	}
+	if grid.Type != VarTypeArray {
+		t.Fatalf("expect array type, got %v", grid.Type)
+	}
+	if grid.ArrayDims != 2 {
+		t.Fatalf("expect 2 dims, got %d", grid.ArrayDims)
+	}
+}
+
 func TestSelectorAndIndexRead(t *testing.T) {
 	executor := NewExecutor()
 	runStatement(executor, `m := new map<string,int> {"a": 1};`)
@@ -632,5 +647,135 @@ int out = 0;
 	}
 	if toInt64Test(out.Value.Interface()) != 1 {
 		t.Fatalf("expect 1, got %v", out.Value.Interface())
+	}
+}
+
+// TestPathPlanningScript validates a grid shortest path via relaxation in GoScript.
+func TestPathPlanningScript(t *testing.T) {
+	executor := NewExecutor()
+	runCompilationUnit(executor, "int distOut = 0;")
+	runBlockStatement(executor, `
+{
+    rows := 4;
+    cols := 4;
+    startR := 0;
+    startC := 0;
+    targetR := 3;
+    targetC := 3;
+    obstacles := new map<int,int> {11:1, 21:1};
+    dist := new int[] {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+    inf := 999;
+    r0 := 0;
+    for(; r0 < rows; r0 = r0 + 1) {
+        c0 := 0;
+        for(; c0 < cols; c0 = c0 + 1) {
+            dist[r0 * cols + c0] = inf;
+        }
+    }
+    dist[startR * cols + startC] = 0;
+    dr := new int[] {1, -1, 0, 0};
+    dc := new int[] {0, 0, 1, -1};
+    step := 0;
+    for(; step < rows * cols; step = step + 1) {
+        r := 0;
+        for(; r < rows; r = r + 1) {
+            c := 0;
+            for(; c < cols; c = c + 1) {
+            key := r * 10 + c;
+            idx := r * cols + c;
+            if obstacles[key] == 1 { continue; }
+            if dist[idx] == inf { continue; }
+                i := 0;
+                for(; i < 4; i = i + 1) {
+                    nr := r + dr[i];
+                    nc := c + dc[i];
+                    if nr < 0 || nr >= rows || nc < 0 || nc >= cols { continue; }
+                    nkey := nr * 10 + nc;
+                nidx := nr * cols + nc;
+                    if obstacles[nkey] == 1 { continue; }
+                if dist[nidx] > dist[idx] + 1 {
+                    dist[nidx] = dist[idx] + 1;
+                    }
+                }
+            }
+        }
+    }
+    distOut = dist[targetR * cols + targetC];
+}
+`)
+	out := getVar(executor, "distOut")
+	if out == nil {
+		t.Fatalf("var distOut not found")
+	}
+	if toInt64Test(out.Value.Interface()) != 6 {
+		t.Fatalf("expect 6, got %v", out.Value.Interface())
+	}
+}
+
+// TestPathPlanningScriptWithMultiDimArray validates grid shortest path using int[][].
+func TestPathPlanningScriptWithMultiDimArray(t *testing.T) {
+	executor := NewExecutor()
+	runCompilationUnit(executor, "int distOut2 = 0;")
+	runBlockStatement(executor, `
+{
+    rows := 4;
+    cols := 4;
+    startR := 0;
+    startC := 0;
+    targetR := 3;
+    targetC := 3;
+    grid := new int[][] {
+        {0,0,0,0},
+        {0,1,0,0},
+        {0,1,0,0},
+        {0,0,0,0}
+    };
+    dist := new int[][] {
+        {0,0,0,0},
+        {0,0,0,0},
+        {0,0,0,0},
+        {0,0,0,0}
+    };
+    inf := 999;
+    r0 := 0;
+    for(; r0 < rows; r0 = r0 + 1) {
+        c0 := 0;
+        for(; c0 < cols; c0 = c0 + 1) {
+            dist[r0][c0] = inf;
+        }
+    }
+    dist[startR][startC] = 0;
+    dr := new int[] {1, -1, 0, 0};
+    dc := new int[] {0, 0, 1, -1};
+    step := 0;
+    for(; step < rows * cols; step = step + 1) {
+        r := 0;
+        for(; r < rows; r = r + 1) {
+            c := 0;
+            for(; c < cols; c = c + 1) {
+                if grid[r][c] == 1 { continue; }
+                if dist[r][c] == inf { continue; }
+                i := 0;
+                for(; i < 4; i = i + 1) {
+                    nr := r + dr[i];
+                    nc := c + dc[i];
+                    if nr < 0 || nr >= rows || nc < 0 || nc >= cols { continue; }
+                    if grid[nr][nc] == 1 { continue; }
+                    if dist[nr][nc] > dist[r][c] + 1 {
+                        dist[nr][nc] = dist[r][c] + 1;
+                    }
+                }
+            }
+        }
+    }
+    distOut2 = dist[targetR][targetC];
+}
+`)
+	out := getVar(executor, "distOut2")
+	if out == nil {
+		t.Fatalf("var distOut2 not found")
+	}
+	if toInt64Test(out.Value.Interface()) != 6 {
+		t.Fatalf("expect 6, got %v", out.Value.Interface())
 	}
 }

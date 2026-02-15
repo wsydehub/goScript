@@ -22,6 +22,10 @@ type Variable struct {
 	Type   VariableType
 	TypeGo reflect.Type
 	Value  reflect.Value
+	// ArrayDims records array nesting depth for runtime type distinction.
+	ArrayDims int
+	// ArrayElemType records the element type of the innermost array.
+	ArrayElemType VariableType
 }
 
 // NewVariable creates a variable with its runtime type and value.

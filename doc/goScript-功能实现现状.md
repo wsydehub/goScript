@@ -7,7 +7,7 @@
 ## 已实现能力
 - 解析入口与执行框架：CompilationUnit 由执行器 Visitor 执行 [go_script.go](../go_script.go#L1-L24)、[executor.go](../executor.go#L68-L152)
 - 作用域与变量查找：ScopeStack + 逐层查找变量 [scope.go](../scope.go#L1-L34)、[executor.go](../executor.go#L1030-L1050)
-- 变量声明（带类型）：默认值、基础类型转换、数组/Map 初始化时的动态类型修正，支持变量声明内 `{}` 初始化器，支持 `map<..>[]` 与 `connector<..>` 类型解析 [executor.go](../executor.go#L168-L237)、[executor.go](../executor.go#L1157-L1190)
+- 变量声明（带类型）：默认值、基础类型转换、数组/Map 初始化时的动态类型修正，支持变量声明内 `{}` 初始化器，支持 `map<..>[]` 与 `connector<..>` 类型解析；数组维度运行时元信息可区分多维数组 [executor.go](../executor.go#L168-L237)、[executor.go](../executor.go#L1157-L1235)
 - 基础字面量与标识符取值：int/float/char/string/bool/null [executor.go](../executor.go#L754-L812)
 - 表达式运算：算术、比较、逻辑、单目、三元 [executor.go](../executor.go#L284-L381)、[executor.go](../executor.go#L689-L744)
 - 变量创建并赋值（:=）：支持多 lhs 与多 rhs，支持单一多返回值拆包 [executor.go](../executor.go#L304-L333)、[executor.go](../executor.go#L481-L536)
@@ -28,4 +28,4 @@
 - killFlag 保留字段未定义触发路径，仅用于占位 [executor.go](../executor.go#L11-L24)
 
 ## 测试覆盖情况
-- 已覆盖：算术、:= 创建、数组/Map 索引写入、for+break/continue、脚本函数、--、声明 `{}` 初始化器、connector 运行时适配器与基础调用、复杂 LValue 链式写入、多返回值拆包、类型解析与 creator 强转 [executor_test.go](../executor_test.go)
+- 已覆盖：算术、:= 创建、数组/Map 索引写入、for+break/continue、脚本函数、--、声明 `{}` 初始化器、connector 运行时适配器与基础调用、复杂 LValue 链式写入、多返回值拆包、类型解析与 creator 强转、路径规划脚本用例、多维数组运行时维度、多维数组路径规划 [executor_test.go](../executor_test.go)
