@@ -16,8 +16,8 @@ func (t *ScopeStack) Pop() *Scope {
 	if t.IsEmpty() {
 		panic("ScopeStack is empty, can't pop")
 	}
-	top := t.stack[0]
-	t.stack = t.stack[1:]
+	top := t.stack[len(t.stack)-1]
+	t.stack = t.stack[:len(t.stack)-1]
 	return top
 }
 
@@ -25,7 +25,7 @@ func (t *ScopeStack) Top() *Scope {
 	if t.IsEmpty() {
 		panic("ScopeStack is empty, can't top")
 	}
-	return t.stack[0]
+	return t.stack[len(t.stack)-1]
 }
 
 func (t *ScopeStack) IsEmpty() bool {
@@ -48,8 +48,8 @@ func (t *FuncStack) Pop() *Function {
 	if t.IsEmpty() {
 		panic("FuncStack is empty, can't pop")
 	}
-	top := t.stack[0]
-	t.stack = t.stack[1:]
+	top := t.stack[len(t.stack)-1]
+	t.stack = t.stack[:len(t.stack)-1]
 	return top
 }
 
@@ -57,7 +57,7 @@ func (t *FuncStack) Top() *Function {
 	if t.IsEmpty() {
 		panic("FuncStack is empty, can't top")
 	}
-	return t.stack[0]
+	return t.stack[len(t.stack)-1]
 }
 
 func (t *FuncStack) IsEmpty() bool {

@@ -33,6 +33,10 @@ func NewExecutor() *Executor {
 	return executor
 }
 
+func (e *Executor) RegisterFunc(name string, fn interface{}) {
+	e.GoVarMap[name] = reflect.ValueOf(fn)
+}
+
 func (e *Executor) PushFunc(f *Function) {
 	e.funcStack.Push(f)
 	e.scopeStack.Push(f.Scope)
@@ -75,7 +79,13 @@ func (e *Executor) VisitErrorNode(node antlr.ErrorNode) interface{} {
 }
 
 func (e *Executor) VisitCompilationUnit(ctx *CompilationUnitContext) interface{} {
-	return e.VisitChildren(ctx)
+	for _, v := range ctx.AllVariableDeclaration() {
+		v.Accept(e)
+	}
+	for _, f := range ctx.AllFunctionDeclaration() {
+		f.Accept(e)
+	}
+	return nil
 }
 
 func (e *Executor) VisitFunctionDeclaration(ctx *FunctionDeclarationContext) interface{} {
@@ -88,6 +98,10 @@ func (e *Executor) VisitFormalParameters(ctx *FormalParametersContext) interface
 
 func (e *Executor) VisitFormalParameterDecl(ctx *FormalParameterDeclContext) interface{} {
 	return nil
+}
+
+func (e *Executor) VisitReturnType(ctx *ReturnTypeContext) interface{} {
+	return ctx.GetText()
 }
 
 func (e *Executor) VisitBlock(ctx *BlockContext) interface{} {
@@ -109,17 +123,25 @@ func (e *Executor) VisitVariableDeclaration(ctx *VariableDeclarationContext) int
 		if declCtx.VariableInitializer() != nil {
 			value = declCtx.VariableInitializer().Accept(e)
 		}
-		coerced := e.coerceValue(value, varType)
+		actualType := varType
+		actualGo := typeGo
+		switch value.(type) {
+		case []interface{}:
+			actualType, actualGo = VarTypeArray, reflect.TypeOf([]interface{}{})
+		case map[interface{}]interface{}:
+			actualType, actualGo = VarTypeMap, reflect.TypeOf(map[interface{}]interface{}(nil))
+		}
+		coerced := e.coerceValue(value, actualType)
 		var valueRef reflect.Value
 		if coerced == nil {
-			valueRef = reflect.Zero(typeGo)
+			valueRef = reflect.Zero(actualGo)
 		} else {
 			valueRef = reflect.ValueOf(coerced)
-			if typeGo != nil && valueRef.IsValid() && valueRef.Type() != typeGo && valueRef.Type().ConvertibleTo(typeGo) {
-				valueRef = valueRef.Convert(typeGo)
+			if actualGo != nil && valueRef.IsValid() && valueRef.Type() != actualGo && valueRef.Type().ConvertibleTo(actualGo) {
+				valueRef = valueRef.Convert(actualGo)
 			}
 		}
-		e.addVar(NewVariable(name, varType, typeGo, valueRef))
+		e.addVar(NewVariable(name, actualType, actualGo, valueRef))
 	}
 	return nil
 }
@@ -140,11 +162,27 @@ func (e *Executor) VisitVariableInitializer(ctx *VariableInitializerContext) int
 }
 
 func (e *Executor) VisitArrayInitializer(ctx *ArrayInitializerContext) interface{} {
-	return nil
+	items := make([]interface{}, 0, len(ctx.AllVariableInitializer()))
+	for _, vi := range ctx.AllVariableInitializer() {
+		items = append(items, vi.Accept(e))
+	}
+	return items
 }
 
 func (e *Executor) VisitMapInitializer(ctx *MapInitializerContext) interface{} {
-	return nil
+	m := map[interface{}]interface{}{}
+	for _, me := range ctx.AllMapEntry() {
+		key := me.Expression().Accept(e)
+		val := me.VariableInitializer().Accept(e)
+		m[key] = val
+	}
+	return m
+}
+
+func (e *Executor) VisitMapEntry(ctx *MapEntryContext) interface{} {
+	key := ctx.Expression().Accept(e)
+	val := ctx.VariableInitializer().Accept(e)
+	return []interface{}{key, val}
 }
 
 func (e *Executor) VisitType_(ctx *Type_Context) interface{} {
@@ -183,19 +221,43 @@ func (e *Executor) VisitIfStatement(ctx *IfStatementContext) interface{} {
 }
 
 func (e *Executor) VisitForStatement(ctx *ForStatementContext) interface{} {
+	ctrl := ctx.ForControl()
+	if ctrl != nil {
+		if ctrl.ForInit() != nil {
+			ctrl.ForInit().Accept(e)
+		}
+	}
+	for {
+		if ctrl != nil && ctrl.Expression() != nil {
+			if !e.toBool(ctrl.Expression().Accept(e)) {
+				break
+			}
+		}
+		e.PushScope(NewScope(ForScopeType))
+		e.breakFlag = false
+		e.continueFlag = false
+		ctx.Statement().Accept(e)
+		e.PopScope()
+		if e.killFlag || e.breakFlag {
+			break
+		}
+		if ctrl != nil && ctrl.ForUpdate() != nil {
+			ctrl.ForUpdate().Accept(e)
+		}
+	}
 	return nil
 }
 
 func (e *Executor) VisitForControl(ctx *ForControlContext) interface{} {
-	return nil
+	return e.VisitChildren(ctx)
 }
 
 func (e *Executor) VisitForInit(ctx *ForInitContext) interface{} {
-	return nil
+	return e.VisitChildren(ctx)
 }
 
 func (e *Executor) VisitForUpdate(ctx *ForUpdateContext) interface{} {
-	return nil
+	return e.VisitChildren(ctx)
 }
 
 func (e *Executor) VisitReturnStatement(ctx *ReturnStatementContext) interface{} {
@@ -206,11 +268,13 @@ func (e *Executor) VisitReturnStatement(ctx *ReturnStatementContext) interface{}
 }
 
 func (e *Executor) VisitBreakStatement(ctx *BreakStatementContext) interface{} {
-	return nil
+	e.breakFlag = true
+	return true
 }
 
 func (e *Executor) VisitContinueStatement(ctx *ContinueStatementContext) interface{} {
-	return nil
+	e.continueFlag = true
+	return true
 }
 
 func (e *Executor) VisitExpressionStatement(ctx *ExpressionStatementContext) interface{} {
@@ -238,11 +302,33 @@ func (e *Executor) VisitAndExpr(ctx *AndExprContext) interface{} {
 }
 
 func (e *Executor) VisitCreateAndAssignExpr(ctx *CreateAndAssignExprContext) interface{} {
-	values := ctx.AllExpression()
-	if len(values) == 0 {
-		return nil
+	ids := ctx.IdentifierList().(*IdentifierListContext).AllIdentifier()
+	rhs := ctx.AllExpression()
+	values := make([]interface{}, 0, len(rhs))
+	for _, r := range rhs {
+		values = append(values, r.Accept(e))
 	}
-	return values[len(values)-1].Accept(e)
+	for i, id := range ids {
+		name := id.GetText()
+		val := interface{}(nil)
+		if i < len(values) {
+			val = values[i]
+		} else if len(values) > 0 {
+			val = values[len(values)-1]
+		}
+		e.addVar(NewVariable(name, VarTypeDynamic, reflect.TypeOf((*interface{})(nil)).Elem(), e.valueFromInterface(val)))
+	}
+	if len(values) > 0 {
+		return values[len(values)-1]
+	}
+	return nil
+}
+
+func (e *Executor) valueFromInterface(val interface{}) reflect.Value {
+	if val == nil {
+		return reflect.Zero(reflect.TypeOf((*interface{})(nil)).Elem())
+	}
+	return reflect.ValueOf(val)
 }
 
 func (e *Executor) VisitAddExpr(ctx *AddExprContext) interface{} {
@@ -295,27 +381,167 @@ func (e *Executor) VisitOrExpr(ctx *OrExprContext) interface{} {
 }
 
 func (e *Executor) VisitIndexExpr(ctx *IndexExprContext) interface{} {
-	return nil
+	container := ctx.Expression(0).Accept(e)
+	index := ctx.Expression(1).Accept(e)
+	switch c := container.(type) {
+	case []interface{}:
+		i, _ := e.toInt64(index)
+		if int(i) >= 0 && int(i) < len(c) {
+			return c[i]
+		}
+		return nil
+	case map[interface{}]interface{}:
+		return c[index]
+	case map[string]interface{}:
+		if s, ok := index.(string); ok {
+			return c[s]
+		}
+		return nil
+	default:
+		return nil
+	}
 }
 
 func (e *Executor) VisitAssignExpr(ctx *AssignExprContext) interface{} {
-	values := ctx.AllExpression()
-	if len(values) == 0 {
-		return nil
+	lhs := ctx.AllLvalue()
+	rhs := ctx.AllExpression()
+	values := make([]interface{}, 0, len(rhs))
+	for _, r := range rhs {
+		values = append(values, r.Accept(e))
 	}
-	return values[len(values)-1].Accept(e)
+	write := func(l ILvalueContext, val interface{}) {
+		if l.Expression() != nil && l.Lvalue() != nil {
+			base := l.Lvalue()
+			idxVal := l.Expression().Accept(e)
+			for base.Lvalue() != nil && base.Expression() != nil {
+				base = base.Lvalue()
+			}
+			baseName := base.Identifier().GetText()
+			v := e.lookupVar(baseName)
+			if v == nil {
+				return
+			}
+			container := v.Value.Interface()
+			switch c := container.(type) {
+			case []interface{}:
+				i, _ := e.toInt64(idxVal)
+				if int(i) >= 0 && int(i) < len(c) {
+					c[int(i)] = val
+					v.Value = reflect.ValueOf(c)
+				}
+			case map[interface{}]interface{}:
+				c[idxVal] = val
+				v.Value = reflect.ValueOf(c)
+			case map[string]interface{}:
+				if s, ok := idxVal.(string); ok {
+					c[s] = val
+					v.Value = reflect.ValueOf(c)
+				}
+			}
+			return
+		}
+		if l.Lvalue() != nil && l.Identifier() != nil {
+			base := l.Lvalue()
+			for base.Lvalue() != nil && base.Expression() != nil {
+				base = base.Lvalue()
+			}
+			baseName := base.Identifier().GetText()
+			v := e.lookupVar(baseName)
+			if v == nil {
+				return
+			}
+			container := v.Value.Interface()
+			field := l.Identifier().GetText()
+			switch c := container.(type) {
+			case map[interface{}]interface{}:
+				c[field] = val
+				v.Value = reflect.ValueOf(c)
+			case map[string]interface{}:
+				c[field] = val
+				v.Value = reflect.ValueOf(c)
+			}
+			return
+		}
+		if l.Identifier() != nil {
+			name := l.Identifier().GetText()
+			v := e.lookupVar(name)
+			if v == nil {
+				e.addVar(NewVariable(name, VarTypeDynamic, reflect.TypeOf((*interface{})(nil)).Elem(), e.valueFromInterface(val)))
+			} else {
+				v.Value = e.valueFromInterface(val)
+			}
+			return
+		}
+	}
+	for i := 0; i < len(lhs); i++ {
+		var val interface{}
+		if i < len(values) {
+			val = values[i]
+		} else if len(values) > 0 {
+			val = values[len(values)-1]
+		}
+		write(lhs[i], val)
+	}
+	if len(values) > 0 {
+		return values[len(values)-1]
+	}
+	return nil
 }
 
 func (e *Executor) VisitSelectorExpr(ctx *SelectorExprContext) interface{} {
+	base := ctx.Expression().Accept(e)
+	field := ctx.Identifier().GetText()
+	switch c := base.(type) {
+	case map[interface{}]interface{}:
+		return c[field]
+	case map[string]interface{}:
+		return c[field]
+	}
+	v := reflect.ValueOf(base)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	if v.Kind() == reflect.Struct {
+		f := v.FieldByName(field)
+		if f.IsValid() && f.CanInterface() {
+			return f.Interface()
+		}
+	}
 	return nil
 }
 
 func (e *Executor) VisitCreateExpr(ctx *CreateExprContext) interface{} {
+	if ctx.Creator() != nil {
+		return ctx.Creator().Accept(e)
+	}
 	return nil
 }
 
 func (e *Executor) VisitSelfAddExpr(ctx *SelfAddExprContext) interface{} {
-	return ctx.Expression().Accept(e)
+	expr := ctx.Expression()
+	name := expr.GetText()
+	if strings.IndexByte(name, '.') == -1 && strings.IndexByte(name, '[') == -1 {
+		v := e.lookupVar(name)
+		if v != nil {
+			switch v.Value.Interface().(type) {
+			case int64:
+				cur, _ := e.toInt64(v.Value.Interface())
+				v.Value = reflect.ValueOf(cur + 1)
+				return cur + 1
+			case float64:
+				f, _ := e.toFloat64(v.Value.Interface())
+				v.Value = reflect.ValueOf(f + 1)
+				return f + 1
+			default:
+				cur, ok := e.toInt64(v.Value.Interface())
+				if ok {
+					v.Value = reflect.ValueOf(cur + 1)
+					return cur + 1
+				}
+			}
+		}
+	}
+	return expr.Accept(e)
 }
 
 func (e *Executor) VisitPrimaryExpr(ctx *PrimaryExprContext) interface{} {
@@ -323,7 +549,45 @@ func (e *Executor) VisitPrimaryExpr(ctx *PrimaryExprContext) interface{} {
 }
 
 func (e *Executor) VisitCallExpr(ctx *CallExprContext) interface{} {
-	return nil
+	callee := ctx.Expression().GetText()
+	fn, ok := e.GoVarMap[callee]
+	if !ok {
+		return nil
+	}
+	var args []reflect.Value
+	if ctx.ExpressionList() != nil {
+		exprs := ctx.ExpressionList().(*ExpressionListContext).AllExpression()
+		args = make([]reflect.Value, 0, len(exprs))
+		for i, expr := range exprs {
+			val := expr.Accept(e)
+			rv := reflect.ValueOf(val)
+			if i < fn.Type().NumIn() {
+				param := fn.Type().In(i)
+				if !rv.IsValid() {
+					rv = reflect.Zero(param)
+				} else if rv.Type().AssignableTo(param) {
+				} else if rv.Type().ConvertibleTo(param) {
+					rv = rv.Convert(param)
+				} else if param.Kind() == reflect.Interface {
+				} else {
+					rv = reflect.Zero(param)
+				}
+			}
+			args = append(args, rv)
+		}
+	}
+	results := fn.Call(args)
+	if len(results) == 0 {
+		return nil
+	}
+	if len(results) == 1 {
+		return results[0].Interface()
+	}
+	out := make([]interface{}, 0, len(results))
+	for _, r := range results {
+		out = append(out, r.Interface())
+	}
+	return out
 }
 
 func (e *Executor) VisitTernaryExpr(ctx *TernaryExprContext) interface{} {
@@ -343,7 +607,7 @@ func (e *Executor) VisitPrimary(ctx *PrimaryContext) interface{} {
 	}
 	if ctx.Identifier() != nil {
 		variable := e.lookupVar(ctx.Identifier().GetText())
-		if variable == nil {
+		if variable == nil || !variable.Value.IsValid() {
 			return nil
 		}
 		return variable.Value.Interface()
@@ -386,16 +650,27 @@ func (e *Executor) VisitExpressionList(ctx *ExpressionListContext) interface{} {
 	return values
 }
 
-func (e *Executor) VisitCreator(ctx *CreatorContext) interface{} {
-	return nil
+func (e *Executor) VisitIdentifierList(ctx *IdentifierListContext) interface{} {
+	ids := ctx.AllIdentifier()
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, id.GetText())
+	}
+	return out
 }
 
+func (e *Executor) VisitLvalue(ctx *LvalueContext) interface{} {
+	return ctx.GetText()
+}
+
+func (e *Executor) VisitCreator(ctx *CreatorContext) interface{} { return e.VisitChildren(ctx) }
+
 func (e *Executor) VisitMapCreator(ctx *MapCreatorContext) interface{} {
-	return nil
+	return ctx.MapInitializer().Accept(e)
 }
 
 func (e *Executor) VisitArrayCreator(ctx *ArrayCreatorContext) interface{} {
-	return nil
+	return ctx.ArrayInitializer().Accept(e)
 }
 
 func (e *Executor) VisitCreatorName(ctx *CreatorNameContext) interface{} {
@@ -421,6 +696,12 @@ func (e *Executor) VisitDynamicCreator(ctx *DynamicCreatorContext) interface{} {
 }
 
 func (e *Executor) typeFromText(text string) (VariableType, reflect.Type) {
+	if strings.Contains(text, "map<") {
+		return VarTypeMap, reflect.TypeOf(map[interface{}]interface{}(nil))
+	}
+	if strings.Contains(text, "[]") {
+		return VarTypeArray, reflect.TypeOf([]interface{}{})
+	}
 	base := strings.TrimRight(text, "[]")
 	switch base {
 	case "int", "uint":
@@ -450,6 +731,10 @@ func (e *Executor) defaultValue(t VariableType) interface{} {
 		return false
 	case VarTypeChar, VarTypeString:
 		return ""
+	case VarTypeArray:
+		return []interface{}{}
+	case VarTypeMap:
+		return map[interface{}]interface{}{}
 	default:
 		return nil
 	}
