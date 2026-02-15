@@ -367,3 +367,185 @@ func TestTypeParsingAndCreators(t *testing.T) {
 		t.Fatalf("expect 1, got %v", z.Value.Interface())
 	}
 }
+
+func TestIfElse(t *testing.T) {
+	executor := NewExecutor()
+	runStatement(executor, "x := 0;")
+	runStatement(executor, "if 1 < 2 { x = 3; } else { x = 4; }")
+	v := getVar(executor, "x")
+	if v == nil {
+		t.Fatalf("var x not found")
+	}
+	if toInt64Test(v.Value.Interface()) != 3 {
+		t.Fatalf("expect 3, got %v", v.Value.Interface())
+	}
+	runStatement(executor, "if 2 < 1 { x = 5; } else { x = 6; }")
+	if toInt64Test(v.Value.Interface()) != 6 {
+		t.Fatalf("expect 6, got %v", v.Value.Interface())
+	}
+}
+
+func TestForInitUpdate(t *testing.T) {
+	executor := NewExecutor()
+	runStatement(executor, "sum := 0;")
+	runStatement(executor, "for(int i = 0; i < 3; i = i + 1) { sum = sum + i; }")
+	v := getVar(executor, "sum")
+	if v == nil {
+		t.Fatalf("var sum not found")
+	}
+	if toInt64Test(v.Value.Interface()) != 3 {
+		t.Fatalf("expect 3, got %v", v.Value.Interface())
+	}
+}
+
+func TestExpressionOps(t *testing.T) {
+	executor := NewExecutor()
+	runStatement(executor, "a := 1 + 2 * 3;")
+	runStatement(executor, "b := (1 + 2) * 3;")
+	runStatement(executor, "c := 5 % 2;")
+	runStatement(executor, "d := 2 > 1;")
+	runStatement(executor, "e := 2 <= 1;")
+	runStatement(executor, "f := !false;")
+	runStatement(executor, "g := true && false;")
+	runStatement(executor, "h := false || true;")
+	runStatement(executor, "i := 1 < 2 ? 3 : 4;")
+	a := getVar(executor, "a")
+	b := getVar(executor, "b")
+	c := getVar(executor, "c")
+	d := getVar(executor, "d")
+	e := getVar(executor, "e")
+	f := getVar(executor, "f")
+	g := getVar(executor, "g")
+	h := getVar(executor, "h")
+	i := getVar(executor, "i")
+	if a == nil || b == nil || c == nil || d == nil || e == nil || f == nil || g == nil || h == nil || i == nil {
+		t.Fatalf("vars not found")
+	}
+	if toInt64Test(a.Value.Interface()) != 7 || toInt64Test(b.Value.Interface()) != 9 {
+		t.Fatalf("arith invalid")
+	}
+	if toInt64Test(c.Value.Interface()) != 1 {
+		t.Fatalf("mod invalid")
+	}
+	if d.Value.Interface() != true || e.Value.Interface() != false {
+		t.Fatalf("compare invalid")
+	}
+	if f.Value.Interface() != true || g.Value.Interface() != false || h.Value.Interface() != true {
+		t.Fatalf("logic invalid")
+	}
+	if toInt64Test(i.Value.Interface()) != 3 {
+		t.Fatalf("ternary invalid")
+	}
+}
+
+func TestLiterals(t *testing.T) {
+	executor := NewExecutor()
+	runStatement(executor, `a := 0x10;`)
+	runStatement(executor, `b := 010;`)
+	runStatement(executor, `c := 10;`)
+	runStatement(executor, `d := 1.5;`)
+	runStatement(executor, `e := 'a';`)
+	runStatement(executor, `f := "hi";`)
+	runStatement(executor, `g := true;`)
+	runStatement(executor, `h := false;`)
+	runStatement(executor, `i := null;`)
+	a := getVar(executor, "a")
+	b := getVar(executor, "b")
+	c := getVar(executor, "c")
+	d := getVar(executor, "d")
+	e := getVar(executor, "e")
+	f := getVar(executor, "f")
+	g := getVar(executor, "g")
+	h := getVar(executor, "h")
+	i := getVar(executor, "i")
+	if a == nil || b == nil || c == nil || d == nil || e == nil || f == nil || g == nil || h == nil || i == nil {
+		t.Fatalf("vars not found")
+	}
+	if toInt64Test(a.Value.Interface()) != 16 || toInt64Test(b.Value.Interface()) != 8 || toInt64Test(c.Value.Interface()) != 10 {
+		t.Fatalf("int literal invalid")
+	}
+	if _, ok := d.Value.Interface().(float64); !ok {
+		t.Fatalf("float literal invalid")
+	}
+	if e.Value.Interface() != "a" || f.Value.Interface() != "hi" {
+		t.Fatalf("string literal invalid")
+	}
+	if g.Value.Interface() != true || h.Value.Interface() != false {
+		t.Fatalf("bool literal invalid")
+	}
+	if i.Value.Interface() != nil {
+		t.Fatalf("null literal invalid")
+	}
+}
+
+func TestCreateAndAssign(t *testing.T) {
+	executor := NewExecutor()
+	runStatement(executor, "a, b := 1, 2;")
+	a := getVar(executor, "a")
+	b := getVar(executor, "b")
+	if a == nil || b == nil {
+		t.Fatalf("vars a/b not found")
+	}
+	if toInt64Test(a.Value.Interface()) != 1 || toInt64Test(b.Value.Interface()) != 2 {
+		t.Fatalf("assign invalid")
+	}
+}
+
+func TestSelectorAndIndexRead(t *testing.T) {
+	executor := NewExecutor()
+	runStatement(executor, `m := new map<string,int> {"a": 1};`)
+	runStatement(executor, `arr := new int[] {9,8};`)
+	runStatement(executor, `x := m["a"];`)
+	runStatement(executor, `y := arr[1];`)
+	x := getVar(executor, "x")
+	y := getVar(executor, "y")
+	if x == nil || y == nil {
+		t.Fatalf("vars x/y not found")
+	}
+	if toInt64Test(x.Value.Interface()) != 1 || toInt64Test(y.Value.Interface()) != 8 {
+		t.Fatalf("read invalid")
+	}
+}
+
+func TestLongScriptScenario(t *testing.T) {
+	executor := NewExecutor()
+	executor.RegisterFunc("add", func(a int64, b int64) int64 { return a + b })
+	executor.RegisterConnector("SampleConnector", &SampleConnector{})
+	runCompilationUnit(executor, `
+func fib(int n) int {
+    if n <= 1 { return n; }
+    return fib(n - 1) + fib(n - 2);
+}
+func pair(int a) (int, int) {
+    return new int[] {a, a + 1};
+}
+int base = 2;
+int out = 0;
+`)
+	runBlockStatement(executor, `
+{
+    sum := 0;
+    arr := new int[] {1,2,3};
+    m := new map<string,int> {"a": 1, "b": 2};
+    for(int i = 0; i < 3; i = i + 1) {
+        sum = sum + arr[i];
+    }
+    if sum > 5 { m["c"] = sum; } else { m["c"] = 0; }
+    x, y := pair(sum);
+    z := fib(5);
+    k := add(base, y);
+    c := new connector<SampleConnector>();
+    c.Inc();
+    c.Add(3);
+    result := (m["c"] + x + y + z + k + c.Count) > 20 ? 1 : 0;
+    out = result;
+}
+`)
+	out := getVar(executor, "out")
+	if out == nil {
+		t.Fatalf("var out not found")
+	}
+	if toInt64Test(out.Value.Interface()) != 1 {
+		t.Fatalf("expect 1, got %v", out.Value.Interface())
+	}
+}
