@@ -491,6 +491,91 @@ func TestCreateAndAssign(t *testing.T) {
 	}
 }
 
+func TestVariableDeclarationDefaults(t *testing.T) {
+	executor := NewExecutor()
+	runCompilationUnit(executor, "int a; float b; bool c; char d; string e; dynamic f; map<int,int> g; int[] h;")
+	a := getVar(executor, "a")
+	b := getVar(executor, "b")
+	c := getVar(executor, "c")
+	d := getVar(executor, "d")
+	e := getVar(executor, "e")
+	f := getVar(executor, "f")
+	g := getVar(executor, "g")
+	h := getVar(executor, "h")
+	if a == nil || b == nil || c == nil || d == nil || e == nil || f == nil || g == nil || h == nil {
+		t.Fatalf("vars not found")
+	}
+	if toInt64Test(a.Value.Interface()) != 0 {
+		t.Fatalf("expect 0, got %v", a.Value.Interface())
+	}
+	if _, ok := b.Value.Interface().(float64); !ok {
+		t.Fatalf("expect float64, got %T", b.Value.Interface())
+	}
+	if c.Value.Interface() != false {
+		t.Fatalf("expect false, got %v", c.Value.Interface())
+	}
+	if d.Value.Interface() != "" || e.Value.Interface() != "" {
+		t.Fatalf("expect empty string, got %v/%v", d.Value.Interface(), e.Value.Interface())
+	}
+	if f.Value.Interface() != nil {
+		t.Fatalf("expect nil, got %v", f.Value.Interface())
+	}
+	if _, ok := g.Value.Interface().(map[interface{}]interface{}); !ok {
+		t.Fatalf("expect map, got %T", g.Value.Interface())
+	}
+	if _, ok := h.Value.Interface().([]interface{}); !ok {
+		t.Fatalf("expect array, got %T", h.Value.Interface())
+	}
+}
+
+func TestVariableDeclarationInit(t *testing.T) {
+	executor := NewExecutor()
+	runCompilationUnit(executor, `
+int a = 1;
+float b = 1;
+bool c = true;
+char d = 'x';
+string e = "hi";
+dynamic f = 3;
+map<int,int> g = {1:2,3:4};
+int[] h = {5,6};
+`)
+	a := getVar(executor, "a")
+	b := getVar(executor, "b")
+	c := getVar(executor, "c")
+	d := getVar(executor, "d")
+	e := getVar(executor, "e")
+	f := getVar(executor, "f")
+	g := getVar(executor, "g")
+	h := getVar(executor, "h")
+	if a == nil || b == nil || c == nil || d == nil || e == nil || f == nil || g == nil || h == nil {
+		t.Fatalf("vars not found")
+	}
+	if toInt64Test(a.Value.Interface()) != 1 {
+		t.Fatalf("expect 1, got %v", a.Value.Interface())
+	}
+	if _, ok := b.Value.Interface().(float64); !ok {
+		t.Fatalf("expect float64, got %T", b.Value.Interface())
+	}
+	if c.Value.Interface() != true {
+		t.Fatalf("expect true, got %v", c.Value.Interface())
+	}
+	if d.Value.Interface() != "x" || e.Value.Interface() != "hi" {
+		t.Fatalf("expect string values, got %v/%v", d.Value.Interface(), e.Value.Interface())
+	}
+	if toInt64Test(f.Value.Interface()) != 3 {
+		t.Fatalf("expect 3, got %v", f.Value.Interface())
+	}
+	gm, ok := g.Value.Interface().(map[interface{}]interface{})
+	if !ok || toInt64Test(gm[int64(1)]) != 2 || toInt64Test(gm[int64(3)]) != 4 {
+		t.Fatalf("map init invalid")
+	}
+	ha, ok := h.Value.Interface().([]interface{})
+	if !ok || toInt64Test(ha[0]) != 5 || toInt64Test(ha[1]) != 6 {
+		t.Fatalf("array init invalid")
+	}
+}
+
 func TestSelectorAndIndexRead(t *testing.T) {
 	executor := NewExecutor()
 	runStatement(executor, `m := new map<string,int> {"a": 1};`)
