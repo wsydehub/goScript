@@ -323,3 +323,47 @@ func TestMultiReturnAssign(t *testing.T) {
 		t.Fatalf("expect 5,7 got %v,%v", vm.Value.Interface(), vn.Value.Interface())
 	}
 }
+
+func TestTypeParsingAndCreators(t *testing.T) {
+	executor := NewExecutor()
+	executor.RegisterConnector("SampleConnector", &SampleConnector{})
+	runCompilationUnit(executor, "map<int,int>[] ms = {{1:2},{3:4}};")
+	ms := getVar(executor, "ms")
+	if ms == nil {
+		t.Fatalf("var ms not found")
+	}
+	arr, ok := ms.Value.Interface().([]interface{})
+	if !ok || len(arr) != 2 {
+		t.Fatalf("ms type invalid")
+	}
+	m0, ok := arr[0].(map[interface{}]interface{})
+	if !ok || toInt64Test(m0[int64(1)]) != 2 {
+		t.Fatalf("ms[0] invalid")
+	}
+	runStatement(executor, "x := new int(1);")
+	x := getVar(executor, "x")
+	if x == nil {
+		t.Fatalf("var x not found")
+	}
+	if toInt64Test(x.Value.Interface()) != 1 {
+		t.Fatalf("expect 1, got %v", x.Value.Interface())
+	}
+	runStatement(executor, "y := new float(1);")
+	y := getVar(executor, "y")
+	if y == nil {
+		t.Fatalf("var y not found")
+	}
+	if _, ok := y.Value.Interface().(float64); !ok {
+		t.Fatalf("expect float64, got %T", y.Value.Interface())
+	}
+	runBlockStatement(executor, "connector<SampleConnector> c = new connector<SampleConnector>();")
+	runStatement(executor, "c.Inc();")
+	runStatement(executor, "z := c.Count;")
+	z := getVar(executor, "z")
+	if z == nil {
+		t.Fatalf("var z not found")
+	}
+	if toInt64Test(z.Value.Interface()) != 1 {
+		t.Fatalf("expect 1, got %v", z.Value.Interface())
+	}
+}

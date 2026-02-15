@@ -1141,10 +1141,11 @@ func (e *Executor) VisitConnectorCreator(ctx *ConnectorCreatorContext) interface
 }
 
 func (e *Executor) VisitPrimitiveCreator(ctx *PrimitiveCreatorContext) interface{} {
-	if ctx.Expression() != nil {
-		return ctx.Expression().Accept(e)
+	varType, _ := e.typeFromText(ctx.PrimitiveType().GetText())
+	if ctx.Expression() == nil {
+		return e.defaultValue(varType)
 	}
-	return nil
+	return e.coerceValue(ctx.Expression().Accept(e), varType)
 }
 
 func (e *Executor) VisitDynamicCreator(ctx *DynamicCreatorContext) interface{} {
@@ -1156,11 +1157,22 @@ func (e *Executor) VisitDynamicCreator(ctx *DynamicCreatorContext) interface{} {
 
 func (e *Executor) typeFromText(text string) (VariableType, reflect.Type) {
 	// Map grammar type text to internal variable type and Go type.
+	if strings.Contains(text, "[]") {
+		return VarTypeArray, reflect.TypeOf([]interface{}{})
+	}
 	if strings.Contains(text, "map<") {
 		return VarTypeMap, reflect.TypeOf(map[interface{}]interface{}(nil))
 	}
-	if strings.Contains(text, "[]") {
-		return VarTypeArray, reflect.TypeOf([]interface{}{})
+	if strings.Contains(text, "connector<") {
+		start := strings.Index(text, "<")
+		end := strings.LastIndex(text, ">")
+		if start != -1 && end != -1 && end > start+1 {
+			name := text[start+1 : end]
+			if t, ok := e.GoTypeMap[name]; ok && t != nil {
+				return VarTypeDynamic, t
+			}
+		}
+		return VarTypeDynamic, reflect.TypeOf((*interface{})(nil)).Elem()
 	}
 	base := strings.TrimRight(text, "[]")
 	switch base {
