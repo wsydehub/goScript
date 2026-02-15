@@ -10,6 +10,9 @@ type GoScriptVisitor interface {
 	// Visit a parse tree produced by GoScriptParser#compilationUnit.
 	VisitCompilationUnit(ctx *CompilationUnitContext) interface{}
 
+	// Visit a parse tree produced by GoScriptParser#topLevelStatement.
+	VisitTopLevelStatement(ctx *TopLevelStatementContext) interface{}
+
 	// Visit a parse tree produced by GoScriptParser#functionDeclaration.
 	VisitFunctionDeclaration(ctx *FunctionDeclarationContext) interface{}
 

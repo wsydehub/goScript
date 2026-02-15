@@ -26,6 +26,12 @@ func (s *BaseGoScriptListener) EnterCompilationUnit(ctx *CompilationUnitContext)
 // ExitCompilationUnit is called when production compilationUnit is exited.
 func (s *BaseGoScriptListener) ExitCompilationUnit(ctx *CompilationUnitContext) {}
 
+// EnterTopLevelStatement is called when production topLevelStatement is entered.
+func (s *BaseGoScriptListener) EnterTopLevelStatement(ctx *TopLevelStatementContext) {}
+
+// ExitTopLevelStatement is called when production topLevelStatement is exited.
+func (s *BaseGoScriptListener) ExitTopLevelStatement(ctx *TopLevelStatementContext) {}
+
 // EnterFunctionDeclaration is called when production functionDeclaration is entered.
 func (s *BaseGoScriptListener) EnterFunctionDeclaration(ctx *FunctionDeclarationContext) {}
 

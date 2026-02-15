@@ -10,6 +10,9 @@ type GoScriptListener interface {
 	// EnterCompilationUnit is called when entering the compilationUnit production.
 	EnterCompilationUnit(c *CompilationUnitContext)
 
+	// EnterTopLevelStatement is called when entering the topLevelStatement production.
+	EnterTopLevelStatement(c *TopLevelStatementContext)
+
 	// EnterFunctionDeclaration is called when entering the functionDeclaration production.
 	EnterFunctionDeclaration(c *FunctionDeclarationContext)
 
@@ -180,6 +183,9 @@ type GoScriptListener interface {
 
 	// ExitCompilationUnit is called when exiting the compilationUnit production.
 	ExitCompilationUnit(c *CompilationUnitContext)
+
+	// ExitTopLevelStatement is called when exiting the topLevelStatement production.
+	ExitTopLevelStatement(c *TopLevelStatementContext)
 
 	// ExitFunctionDeclaration is called when exiting the functionDeclaration production.
 	ExitFunctionDeclaration(c *FunctionDeclarationContext)

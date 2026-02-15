@@ -11,6 +11,10 @@ func (v *BaseGoScriptVisitor) VisitCompilationUnit(ctx *CompilationUnitContext) 
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseGoScriptVisitor) VisitTopLevelStatement(ctx *TopLevelStatementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseGoScriptVisitor) VisitFunctionDeclaration(ctx *FunctionDeclarationContext) interface{} {
 	return v.VisitChildren(ctx)
 }

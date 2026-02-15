@@ -30,6 +30,16 @@ func runCompilationUnit(executor *Executor, code string) {
 	tree.Accept(executor)
 }
 
+func runBlock(executor *Executor, code string) {
+	input := antlr.NewInputStream(code)
+	lexer := NewGoScriptLexer(input)
+	tokens := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
+	parser := NewGoScriptParser(tokens)
+	parser.BuildParseTrees = true
+	block := parser.Block().(*BlockContext)
+	executor.VisitBlock(block)
+}
+
 func runBlockStatement(executor *Executor, code string) {
 	input := antlr.NewInputStream(code)
 	lexer := NewGoScriptLexer(input)
@@ -58,6 +68,36 @@ func runStatement(executor *Executor, code string) {
 	parser.BuildParseTrees = true
 	stmt := parser.Statement()
 	stmt.Accept(executor)
+}
+
+func parseCompilationHasError(code string) bool {
+	input := antlr.NewInputStream(code)
+	lexer := NewGoScriptLexer(input)
+	tokens := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
+	parser := NewGoScriptParser(tokens)
+	parser.BuildParseTrees = true
+	parser.RemoveErrorListeners()
+	listener := &parseErrorListener{}
+	parser.AddErrorListener(listener)
+	parser.CompilationUnit()
+	return listener.count > 0
+}
+
+type parseErrorListener struct {
+	count int
+}
+
+func (p *parseErrorListener) SyntaxError(antlr.Recognizer, interface{}, int, int, string, antlr.RecognitionException) {
+	p.count++
+}
+
+func (p *parseErrorListener) ReportAmbiguity(antlr.Parser, *antlr.DFA, int, int, bool, *antlr.BitSet, *antlr.ATNConfigSet) {
+}
+
+func (p *parseErrorListener) ReportAttemptingFullContext(antlr.Parser, *antlr.DFA, int, int, *antlr.BitSet, *antlr.ATNConfigSet) {
+}
+
+func (p *parseErrorListener) ReportContextSensitivity(antlr.Parser, *antlr.DFA, int, int, int, *antlr.ATNConfigSet) {
 }
 
 func toInt64Test(value interface{}) int64 {
@@ -777,5 +817,125 @@ func TestPathPlanningScriptWithMultiDimArray(t *testing.T) {
 	}
 	if toInt64Test(out.Value.Interface()) != 6 {
 		t.Fatalf("expect 6, got %v", out.Value.Interface())
+	}
+}
+
+func TestForLoop(t *testing.T) {
+	executor := NewExecutor()
+	code := `
+sum := 0;
+loopCount := 10000;
+for(int i = 0; i < loopCount; i = i + 1) {
+    sum = sum + i;
+}
+	`
+	runCompilationUnit(executor, code)
+	v := getVar(executor, "sum")
+	if v == nil {
+		t.Fatalf("var sum not found")
+	}
+	if toInt64Test(v.Value.Interface()) != 49995000 {
+		t.Fatalf("expect 49995000, got %v", v.Value.Interface())
+	}
+}
+
+func TestTopLevelStatementRestrictions(t *testing.T) {
+	if !parseCompilationHasError(`return 1;`) {
+		t.Fatalf("expect parse errors for top-level return")
+	}
+}
+
+func TestTopLevelStatementBlock(t *testing.T) {
+	executor := NewExecutor()
+	code := `
+int sum = 0;
+{
+    sum = 2;
+}
+`
+	runCompilationUnit(executor, code)
+	v := getVar(executor, "sum")
+	if v == nil {
+		t.Fatalf("var sum not found")
+	}
+	if toInt64Test(v.Value.Interface()) != 2 {
+		t.Fatalf("expect 2, got %v", v.Value.Interface())
+	}
+}
+
+func TestTopLevelStatementIf(t *testing.T) {
+	executor := NewExecutor()
+	code := `
+int x = 0;
+if true {
+    x = 1;
+}
+`
+	runCompilationUnit(executor, code)
+	v := getVar(executor, "x")
+	if v == nil {
+		t.Fatalf("var x not found")
+	}
+	if toInt64Test(v.Value.Interface()) != 1 {
+		t.Fatalf("expect 1, got %v", v.Value.Interface())
+	}
+}
+
+func TestTopLevelStatementFor(t *testing.T) {
+	executor := NewExecutor()
+	code := `
+int s = 0;
+for(int i = 0; i < 3; i = i + 1) {
+    s = s + 1;
+}
+`
+	runCompilationUnit(executor, code)
+	v := getVar(executor, "s")
+	if v == nil {
+		t.Fatalf("var s not found")
+	}
+	if toInt64Test(v.Value.Interface()) != 3 {
+		t.Fatalf("expect 3, got %v", v.Value.Interface())
+	}
+}
+
+func TestTopLevelStatementExpression(t *testing.T) {
+	executor := NewExecutor()
+	code := `
+int x = 1;
+x = x + 2;
+`
+	runCompilationUnit(executor, code)
+	v := getVar(executor, "x")
+	if v == nil {
+		t.Fatalf("var x not found")
+	}
+	if toInt64Test(v.Value.Interface()) != 3 {
+		t.Fatalf("expect 3, got %v", v.Value.Interface())
+	}
+}
+
+func TestTopLevelStatementFunctionCall(t *testing.T) {
+	executor := NewExecutor()
+	code := `
+func add(int a, int b) int { return a + b; }
+x := add(1, 2);
+`
+	runCompilationUnit(executor, code)
+	v := getVar(executor, "x")
+	if v == nil {
+		t.Fatalf("var x not found")
+	}
+	if toInt64Test(v.Value.Interface()) != 3 {
+		t.Fatalf("expect 3, got %v", v.Value.Interface())
+	}
+}
+
+func TestTopLevelStatementBreakContinueRejected(t *testing.T) {
+	if !parseCompilationHasError(`break;`) {
+		t.Fatalf("expect parse errors for top-level break")
+	}
+	if !parseCompilationHasError(`continue;`) {
+		t.Fatalf("expect parse errors for top-level continue")
 	}
 }

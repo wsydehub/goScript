@@ -1,7 +1,14 @@
 grammar GoScript;
 
 compilationUnit
-    :   (functionDeclaration | (variableDeclaration ';'))* EOF
+    :   (functionDeclaration | (variableDeclaration ';') | topLevelStatement)* EOF
+    ;
+
+topLevelStatement
+    :   block
+    |   ifStatement
+    |   forStatement
+    |   expressionStatement
     ;
 
 //Function

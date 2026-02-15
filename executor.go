@@ -101,12 +101,19 @@ func (e *Executor) VisitErrorNode(node antlr.ErrorNode) interface{} {
 }
 
 func (e *Executor) VisitCompilationUnit(ctx *CompilationUnitContext) interface{} {
-	// Top-level: register variables and functions.
-	for _, v := range ctx.AllVariableDeclaration() {
-		v.Accept(e)
-	}
+	// Top-level: register functions, then execute statements and declarations in order.
 	for _, f := range ctx.AllFunctionDeclaration() {
 		f.Accept(e)
+	}
+	for _, child := range ctx.GetChildren() {
+		switch node := child.(type) {
+		case *VariableDeclarationContext:
+			node.Accept(e)
+		case *TopLevelStatementContext:
+			node.Accept(e)
+		case *StatementContext:
+			node.Accept(e)
+		}
 	}
 	return nil
 }
@@ -283,6 +290,10 @@ func (e *Executor) VisitPrimitiveType(ctx *PrimitiveTypeContext) interface{} {
 }
 
 func (e *Executor) VisitStatement(ctx *StatementContext) interface{} {
+	return e.VisitChildren(ctx)
+}
+
+func (e *Executor) VisitTopLevelStatement(ctx *TopLevelStatementContext) interface{} {
 	return e.VisitChildren(ctx)
 }
 
