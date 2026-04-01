@@ -1,7 +1,8 @@
-// Code generated from GoScript.g4 by ANTLR 4.13.1. DO NOT EDIT.
+// Code generated from GoScript.g4 by ANTLR 4.9.2. DO NOT EDIT.
 
 package goScript // GoScript
-import "github.com/antlr4-go/antlr/v4"
+
+import "github.com/antlr/antlr4/runtime/Go/antlr"
 
 // A complete Visitor for a parse tree produced by GoScriptParser.
 type GoScriptVisitor interface {
@@ -9,9 +10,6 @@ type GoScriptVisitor interface {
 
 	// Visit a parse tree produced by GoScriptParser#compilationUnit.
 	VisitCompilationUnit(ctx *CompilationUnitContext) interface{}
-
-	// Visit a parse tree produced by GoScriptParser#topLevelStatement.
-	VisitTopLevelStatement(ctx *TopLevelStatementContext) interface{}
 
 	// Visit a parse tree produced by GoScriptParser#functionDeclaration.
 	VisitFunctionDeclaration(ctx *FunctionDeclarationContext) interface{}
@@ -21,9 +19,6 @@ type GoScriptVisitor interface {
 
 	// Visit a parse tree produced by GoScriptParser#formalParameterDecl.
 	VisitFormalParameterDecl(ctx *FormalParameterDeclContext) interface{}
-
-	// Visit a parse tree produced by GoScriptParser#returnType.
-	VisitReturnType(ctx *ReturnTypeContext) interface{}
 
 	// Visit a parse tree produced by GoScriptParser#block.
 	VisitBlock(ctx *BlockContext) interface{}
@@ -48,9 +43,6 @@ type GoScriptVisitor interface {
 
 	// Visit a parse tree produced by GoScriptParser#mapInitializer.
 	VisitMapInitializer(ctx *MapInitializerContext) interface{}
-
-	// Visit a parse tree produced by GoScriptParser#mapEntry.
-	VisitMapEntry(ctx *MapEntryContext) interface{}
 
 	// Visit a parse tree produced by GoScriptParser#type_.
 	VisitType_(ctx *Type_Context) interface{}
@@ -97,14 +89,14 @@ type GoScriptVisitor interface {
 	// Visit a parse tree produced by GoScriptParser#expressionStatement.
 	VisitExpressionStatement(ctx *ExpressionStatementContext) interface{}
 
-	// Visit a parse tree produced by GoScriptParser#CreateAndAssignExpr.
-	VisitCreateAndAssignExpr(ctx *CreateAndAssignExprContext) interface{}
-
 	// Visit a parse tree produced by GoScriptParser#MulExpr.
 	VisitMulExpr(ctx *MulExprContext) interface{}
 
 	// Visit a parse tree produced by GoScriptParser#AndExpr.
 	VisitAndExpr(ctx *AndExprContext) interface{}
+
+	// Visit a parse tree produced by GoScriptParser#CreateAndAssignExpr.
+	VisitCreateAndAssignExpr(ctx *CreateAndAssignExprContext) interface{}
 
 	// Visit a parse tree produced by GoScriptParser#AddExpr.
 	VisitAddExpr(ctx *AddExprContext) interface{}
@@ -153,12 +145,6 @@ type GoScriptVisitor interface {
 
 	// Visit a parse tree produced by GoScriptParser#expressionList.
 	VisitExpressionList(ctx *ExpressionListContext) interface{}
-
-	// Visit a parse tree produced by GoScriptParser#identifierList.
-	VisitIdentifierList(ctx *IdentifierListContext) interface{}
-
-	// Visit a parse tree produced by GoScriptParser#lvalue.
-	VisitLvalue(ctx *LvalueContext) interface{}
 
 	// Visit a parse tree produced by GoScriptParser#creator.
 	VisitCreator(ctx *CreatorContext) interface{}

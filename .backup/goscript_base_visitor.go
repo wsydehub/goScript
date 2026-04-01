@@ -1,17 +1,14 @@
-// Code generated from GoScript.g4 by ANTLR 4.13.1. DO NOT EDIT.
+// Code generated from GoScript.g4 by ANTLR 4.9.2. DO NOT EDIT.
 
 package goScript // GoScript
-import "github.com/antlr4-go/antlr/v4"
+
+import "github.com/antlr/antlr4/runtime/Go/antlr"
 
 type BaseGoScriptVisitor struct {
 	*antlr.BaseParseTreeVisitor
 }
 
 func (v *BaseGoScriptVisitor) VisitCompilationUnit(ctx *CompilationUnitContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseGoScriptVisitor) VisitTopLevelStatement(ctx *TopLevelStatementContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -24,10 +21,6 @@ func (v *BaseGoScriptVisitor) VisitFormalParameters(ctx *FormalParametersContext
 }
 
 func (v *BaseGoScriptVisitor) VisitFormalParameterDecl(ctx *FormalParameterDeclContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseGoScriptVisitor) VisitReturnType(ctx *ReturnTypeContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -60,10 +53,6 @@ func (v *BaseGoScriptVisitor) VisitArrayInitializer(ctx *ArrayInitializerContext
 }
 
 func (v *BaseGoScriptVisitor) VisitMapInitializer(ctx *MapInitializerContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseGoScriptVisitor) VisitMapEntry(ctx *MapEntryContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -127,15 +116,15 @@ func (v *BaseGoScriptVisitor) VisitExpressionStatement(ctx *ExpressionStatementC
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseGoScriptVisitor) VisitCreateAndAssignExpr(ctx *CreateAndAssignExprContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseGoScriptVisitor) VisitMulExpr(ctx *MulExprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
 func (v *BaseGoScriptVisitor) VisitAndExpr(ctx *AndExprContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseGoScriptVisitor) VisitCreateAndAssignExpr(ctx *CreateAndAssignExprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -200,14 +189,6 @@ func (v *BaseGoScriptVisitor) VisitIntegerLiteral(ctx *IntegerLiteralContext) in
 }
 
 func (v *BaseGoScriptVisitor) VisitExpressionList(ctx *ExpressionListContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseGoScriptVisitor) VisitIdentifierList(ctx *IdentifierListContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseGoScriptVisitor) VisitLvalue(ctx *LvalueContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

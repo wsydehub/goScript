@@ -1,20 +1,32 @@
 grammar GoScript;
 
 compilationUnit
-    :   (functionDeclaration | (variableDeclaration ';'))* EOF
+    :   (functionDeclaration | (variableDeclaration ';') | topLevelStatement)* EOF
+    ;
+
+topLevelStatement
+    :   block
+    |   ifStatement
+    |   forStatement
+    |   expressionStatement
     ;
 
 //Function
 functionDeclaration
-    :   'func' Identifier formalParameters (type_)* block
+    :   'func' Identifier formalParameters returnType? block
     ;
 
 formalParameters
-    :   '(' formalParameterDecl* ')'
+    :   '(' (formalParameterDecl (',' formalParameterDecl)*)? ')'
     ;
 
 formalParameterDecl
     :   type_ Identifier
+    ;
+
+returnType
+    :   type_
+    |   '(' type_ (',' type_)* ')'
     ;
 
 //Statement | Block
@@ -53,14 +65,18 @@ arrayInitializer
     ;
 
 mapInitializer
-    :   '{' (expression ':' variableInitializer)* '}'
+    :   '{' mapEntry (',' mapEntry)* (',')? '}'
+    ;
+
+mapEntry
+    :   expression ':' variableInitializer
     ;
 
 type_
-    :   primitiveType Brackets*
-    |   mapType Brackets*
-    |   connectorType Brackets*
-    |   dynamicType Brackets*
+    :   primitiveType ('[' ']')*
+    |   mapType ('[' ']')*
+    |   connectorType ('[' ']')*
+    |   dynamicType ('[' ']')*
     ;
 
 mapType
@@ -137,9 +153,9 @@ expressionStatement
 
 expression
     :   primary #PrimaryExpr
-    |   expression '.' expression   #SelectorExpr
+    |   expression '.' Identifier   #SelectorExpr
     |   expression '[' expression ']'   #IndexExpr
-    |   expression '(' expressionList ')'  #CallExpr
+    |   expression '(' expressionList? ')'  #CallExpr
     |   expression ('++' | '--')    #SelfAddExpr
     |   ('+'|'-'|'!') expression    #UnaryExpr
     |   'new' creator   #CreateExpr
@@ -149,8 +165,8 @@ expression
     |   expression '&&' expression  #   AndExpr
     |   expression '||' expression  #   OrExpr
     |   expression '?' expression ':' expression    #   TernaryExpr
-    |<assoc=right>  expression (',' expression)* '=' expression (',' expression)*   # AssignExpr
-    |<assoc=right>  expression (',' expression)* ':=' expression (',' expression)*  #   CreateAndAssignExpr
+    |<assoc=right>  lvalue (',' lvalue)* '=' expression (',' expression)*   # AssignExpr
+    |<assoc=right>  identifierList ':=' expression (',' expression)*  #   CreateAndAssignExpr
     ;
 
 primary
@@ -183,6 +199,16 @@ expressionList
     :   expression (',' expression)*
     ;
 
+identifierList
+    :   Identifier (',' Identifier)*
+    ;
+
+lvalue
+    :   Identifier
+    |   lvalue '.' Identifier
+    |   lvalue '[' expression ']'
+    ;
+
 creator
     :   mapCreator
     |   arrayCreator
@@ -196,7 +222,7 @@ mapCreator
     ;
 
 arrayCreator
-    :   creatorName Brackets+ arrayInitializer
+    :   creatorName ('[' ']')+ arrayInitializer
     ;
 
 creatorName
@@ -220,8 +246,6 @@ dynamicCreator
 
 //Lexer
 Identifier : [a-zA-Z_]([a-zA-Z0-9_])*;
-
-Brackets    :   '['']';
 
 NULL    :   'null';
 
